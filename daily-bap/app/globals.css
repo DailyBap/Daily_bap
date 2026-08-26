@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Daily Bap — Brand Theme Configuration (Tailwind CSS v4)
+   Colors provided by client 2026-08-18
+   ============================================================ */
+
+@theme {
+  /* Brand Colors */
+  --color-brand-primary: #445916;   /* Deep Olive Green — navbar, buttons, headings */
+  --color-brand-accent: #9da613;    /* Lime Yellow-Green — highlights, hover states */
+  --color-brand-white: #ffffff;     /* Pure White — backgrounds */
+
+  /* Typography */
+  --font-display: var(--font-display-var), "Georgia", serif;
+  --font-body: var(--font-body-var), "system-ui", sans-serif;
+  --font-sans: var(--font-body-var), "system-ui", sans-serif;
+}
+
+/* ============================================================
+   CSS Custom Properties (consumed by layout.tsx font vars)
+   ============================================================ */
+:root {
+  --background: #ffffff;
+  --foreground: #2c2c2c;
+  scroll-behavior: smooth;
+}
+
+/* ============================================================
+   Base Styles
+   ============================================================ */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth anchor scrolling offset for fixed navbar */
+[id] {
+  scroll-margin-top: 4.5rem;
+}
+
+/* Leaflet map z-index fix — prevents map from appearing above navbar */
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-map-pane svg,
+.leaflet-map-pane canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.leaflet-container {
+  overflow: hidden;
+}
+
+/* React Three Fiber canvas */
+canvas {
+  display: block;
+}
