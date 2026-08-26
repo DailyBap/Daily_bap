@@ -1,0 +1,7 @@
+[build]
+  base = "daily-bap"
+  publish = ".next"
+  command = "npm install && npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

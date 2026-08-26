@@ -1,8 +1,11 @@
 {
-  "dependencies": {
-    "@ai-sdk/google": "^4.0.51",
-    "@ai-sdk/react": "^4.0.82",
-    "ai": "^7.0.79",
-    "zod": "^4.4.3"
+  "name": "daily-bap-monorepo",
+  "private": true,
+  "workspaces": [
+    "daily-bap"
+  ],
+  "scripts": {
+    "build": "npm --workspace=daily-bap run build",
+    "dev": "npm --workspace=daily-bap run dev"
   }
 }
