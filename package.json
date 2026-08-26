@@ -1,8 +1,44 @@
 {
+  "name": "daily-bap",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.51",
-    "@ai-sdk/react": "^4.0.82",
-    "ai": "^7.0.79",
-    "zod": "^4.4.3"
+    "@ai-sdk/google": "^1.1.20",
+    "@ai-sdk/react": "^1.1.23",
+    "@neondatabase/serverless": "^1.1.0",
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
+    "ai": "^4.1.54",
+    "drizzle-orm": "^0.45.2",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.32.0",
+    "next": "16.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-leaflet": "^5.0.0",
+    "three": "^0.185.1",
+    "zod": "^3.24.2",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "^0.185.4",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.1",
+    "raw-loader": "^4.0.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
