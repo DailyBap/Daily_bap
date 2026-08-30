@@ -1,8 +1,17 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, MeshDistortMaterial, Float, useGLTF, Center } from "@react-three/drei";
-import { useRef, Suspense } from "react";
+import {
+  OrbitControls,
+  MeshDistortMaterial,
+  Float,
+  useGLTF,
+  Center,
+  Environment,
+  ContactShadows,
+  BakeShadows,
+} from "@react-three/drei";
+import { useRef, Suspense, useMemo } from "react";
 import type { Group, Mesh } from "three";
 
 // ----------------------------------------------------------
@@ -12,16 +21,26 @@ function GltfModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   const modelGroupRef = useRef<Group>(null);
 
+  // Ensure shadows and materials are properly applied across all child meshes
+  useMemo(() => {
+    scene.traverse((child) => {
+      if ((child as Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+  }, [scene]);
+
   useFrame((_, delta) => {
     if (modelGroupRef.current) {
-      modelGroupRef.current.rotation.y += delta * 0.3;
+      modelGroupRef.current.rotation.y += delta * 0.35;
     }
   });
 
   return (
     <group ref={modelGroupRef}>
-      <Center>
-        <primitive object={scene} scale={1.2} />
+      <Center position={[0, 0, 0]}>
+        <primitive object={scene} scale={1.8} />
       </Center>
     </group>
   );
@@ -31,7 +50,7 @@ function GltfModel({ url }: { url: string }) {
 useGLTF.preload("/bibimbap.glb");
 
 // ----------------------------------------------------------
-// Procedural fallback bowl mesh (used during loading or fallback)
+// Procedural fallback bowl mesh (used during loading)
 // ----------------------------------------------------------
 function BowlMesh() {
   const bowlRef = useRef<Mesh>(null);
@@ -130,7 +149,7 @@ function FloatingIngredients() {
     <>
       {Array.from({ length: 12 }).map((_, i) => {
         const angle = (i / 12) * Math.PI * 2;
-        const r = 2.2 + Math.random() * 0.5;
+        const r = 2.4 + Math.random() * 0.6;
         return (
           <Float
             key={i}
@@ -141,15 +160,15 @@ function FloatingIngredients() {
             <mesh
               position={[
                 Math.cos(angle) * r,
-                (Math.random() - 0.3) * 1.5,
+                (Math.random() - 0.2) * 1.5,
                 Math.sin(angle) * r * 0.4,
               ]}
             >
-              <sphereGeometry args={[0.04 + Math.random() * 0.04, 8, 8]} />
+              <sphereGeometry args={[0.045 + Math.random() * 0.04, 12, 12]} />
               <meshStandardMaterial
                 color={colors[i % colors.length]}
                 emissive={colors[i % colors.length]}
-                emissiveIntensity={0.3}
+                emissiveIntensity={0.4}
               />
             </mesh>
           </Float>
@@ -166,44 +185,60 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
   const modelUrl = modelRef || "/bibimbap.glb";
 
   return (
-    <div className="w-full h-full min-h-[400px]">
+    <div className="w-full h-full min-h-[420px]">
       <Canvas
-        camera={{ position: [0, 2.5, 5], fov: 45 }}
+        camera={{ position: [0, 2.2, 4.2], fov: 38 }}
         shadows
-        gl={{ antialias: true }}
+        gl={{ antialias: true, toneMappingExposure: 1.15 }}
         dpr={[1, 2]}
       >
-        {/* Lighting */}
-        <ambientLight intensity={0.8} color="#fff8f0" />
+        {/* Environment HDRI Lighting for crisp PBR materials & reflections */}
+        <Environment preset="city" environmentIntensity={0.8} />
+
+        {/* Studio Direct Lighting */}
+        <ambientLight intensity={0.6} color="#fff8f0" />
         <directionalLight
-          position={[5, 8, 5]}
-          intensity={1.2}
+          position={[5, 9, 5]}
+          intensity={1.5}
           color="#ffffff"
           castShadow
           shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0001}
         />
-        <directionalLight position={[-3, 2, -3]} intensity={0.4} color="#9da613" />
-        <pointLight position={[0, 4, 0]} intensity={0.6} color="#f5cc42" distance={10} />
+        <directionalLight position={[-4, 3, -3]} intensity={0.5} color="#9da613" />
+        <pointLight position={[0, 4, 1]} intensity={0.8} color="#f5cc42" distance={10} />
 
-        <Suspense fallback={
-          <Float speed={1} rotationIntensity={0.1} floatIntensity={0.3}>
-            <BowlMesh />
-          </Float>
-        }>
-          <Float speed={1} rotationIntensity={0.1} floatIntensity={0.3}>
+        {/* Soft Floor Shadow */}
+        <ContactShadows
+          position={[0, -1.1, 0]}
+          opacity={0.65}
+          scale={8}
+          blur={2.5}
+          far={4}
+          color="#223311"
+        />
+
+        <Suspense
+          fallback={
+            <Float speed={1} rotationIntensity={0.1} floatIntensity={0.3}>
+              <BowlMesh />
+            </Float>
+          }
+        >
+          <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.35}>
             <GltfModel url={modelUrl} />
           </Float>
           <FloatingIngredients />
         </Suspense>
 
-        {/* Controls — restricted pan, limited zoom */}
+        {/* Orbit Controls */}
         <OrbitControls
           enablePan={false}
-          minDistance={3.5}
-          maxDistance={7}
-          maxPolarAngle={Math.PI / 2}
+          minDistance={2.8}
+          maxDistance={6.5}
+          maxPolarAngle={Math.PI / 2.1}
           autoRotate
-          autoRotateSpeed={0.8}
+          autoRotateSpeed={0.9}
         />
       </Canvas>
     </div>
