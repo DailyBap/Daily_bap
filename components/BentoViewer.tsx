@@ -1,16 +1,40 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, MeshDistortMaterial, Float, Text3D, Center } from "@react-three/drei";
+import { OrbitControls, MeshDistortMaterial, Float, useGLTF, Center } from "@react-three/drei";
 import { useRef, Suspense } from "react";
-import type { Mesh } from "three";
+import type { Group, Mesh } from "three";
 
 // ----------------------------------------------------------
-// Bowl mesh — placeholder until custom GLTF models are ready
+// 3D GLTF Model loader for bibimbap.glb
+// ----------------------------------------------------------
+function GltfModel({ url }: { url: string }) {
+  const { scene } = useGLTF(url);
+  const modelGroupRef = useRef<Group>(null);
+
+  useFrame((_, delta) => {
+    if (modelGroupRef.current) {
+      modelGroupRef.current.rotation.y += delta * 0.3;
+    }
+  });
+
+  return (
+    <group ref={modelGroupRef}>
+      <Center>
+        <primitive object={scene} scale={1.2} />
+      </Center>
+    </group>
+  );
+}
+
+// Preload the added model
+useGLTF.preload("/bibimbap.glb");
+
+// ----------------------------------------------------------
+// Procedural fallback bowl mesh (used during loading or fallback)
 // ----------------------------------------------------------
 function BowlMesh() {
   const bowlRef = useRef<Mesh>(null);
-  const rimRef = useRef<Mesh>(null);
 
   useFrame((_, delta) => {
     if (bowlRef.current) {
@@ -37,7 +61,7 @@ function BowlMesh() {
       </mesh>
 
       {/* Bowl rim */}
-      <mesh ref={rimRef} position={[0, 0.0, 0]} castShadow>
+      <mesh position={[0, 0.0, 0]} castShadow>
         <torusGeometry args={[1.3, 0.07, 16, 48]} />
         <meshStandardMaterial
           color="#445916"
@@ -139,6 +163,8 @@ function FloatingIngredients() {
 // Main exported BentoViewer component
 // ----------------------------------------------------------
 export default function BentoViewer({ modelRef }: { modelRef?: string }) {
+  const modelUrl = modelRef || "/bibimbap.glb";
+
   return (
     <div className="w-full h-full min-h-[400px]">
       <Canvas
@@ -148,7 +174,7 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
         dpr={[1, 2]}
       >
         {/* Lighting */}
-        <ambientLight intensity={0.5} color="#fff8f0" />
+        <ambientLight intensity={0.8} color="#fff8f0" />
         <directionalLight
           position={[5, 8, 5]}
           intensity={1.2}
@@ -159,9 +185,13 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
         <directionalLight position={[-3, 2, -3]} intensity={0.4} color="#9da613" />
         <pointLight position={[0, 4, 0]} intensity={0.6} color="#f5cc42" distance={10} />
 
-        <Suspense fallback={null}>
+        <Suspense fallback={
           <Float speed={1} rotationIntensity={0.1} floatIntensity={0.3}>
             <BowlMesh />
+          </Float>
+        }>
+          <Float speed={1} rotationIntensity={0.1} floatIntensity={0.3}>
+            <GltfModel url={modelUrl} />
           </Float>
           <FloatingIngredients />
         </Suspense>
