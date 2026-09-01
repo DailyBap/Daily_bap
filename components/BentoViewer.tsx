@@ -205,7 +205,7 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
         >
           <PresentationControls
             global
-            snap={{ mass: 2, tension: 400 }}
+            snap={{ tension: 400, friction: 26 }}
             polar={[-0.4, 0.2]}
             azimuth={[-1, 0.75]}
           >
@@ -217,7 +217,7 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
         </Suspense>
 
         {/* Post-processing effects */}
-        <EffectComposer disableNormalPass>
+        <EffectComposer enableNormalPass={false}>
           <DepthOfField
             target={[0, 0, 0]}
             focalLength={0.5}
