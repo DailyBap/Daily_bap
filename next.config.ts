@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Transpile packages that use ESM and require bundling
-  transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],
-
   // Next.js 16 uses Turbopack by default — configure it here
   turbopack: {},
 
