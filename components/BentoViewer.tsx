@@ -205,7 +205,8 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
         >
           <PresentationControls
             global
-            snap={{ tension: 400, friction: 26 }}
+            snap={true}
+            config={{ mass: 2, tension: 400 }}
             polar={[-0.4, 0.2]}
             azimuth={[-1, 0.75]}
           >
