@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import { useState, useEffect } from "react";
 import { ShoppingCart, Menu, X } from "lucide-react";
+import { useCartStore } from "@/store/useCartStore";
+import { siteConfig } from "@/config/brand";
 
 // Inline Instagram SVG (not in this lucide-react version)
 function InstagramIcon({ size = 18 }: { size?: number }) {
@@ -13,9 +17,6 @@ function InstagramIcon({ size = 18 }: { size?: number }) {
     </svg>
   );
 }
-import { useState } from "react";
-import { useCartStore } from "@/store/useCartStore";
-import { siteConfig } from "@/config/brand";
 
 interface NavbarProps {
   onCartOpen: () => void;
@@ -23,7 +24,15 @@ interface NavbarProps {
 
 export default function Navbar({ onCartOpen }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAssamese, setIsAssamese] = useState(false);
   const totalItems = useCartStore((s) => s.getTotalItems());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsAssamese((prev) => !prev);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const navLinks = [
     { label: "Menu", href: "#menu" },
@@ -37,13 +46,33 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex flex-col leading-none group">
-            <span className="text-white font-display text-2xl font-bold tracking-tight group-hover:text-brand-accent transition-colors">
-              {siteConfig.name}
-            </span>
-            <span className="text-brand-accent text-[10px] font-medium tracking-[0.2em] uppercase">
-              Korean Kitchen
-            </span>
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="relative w-10 h-10">
+              <Image
+                src="/logo-en.png"
+                alt="Daily Bap English Logo"
+                fill
+                className={`transition-opacity duration-700 absolute inset-0 object-contain ${
+                  isAssamese ? "opacity-0" : "opacity-100"
+                }`}
+              />
+              <Image
+                src="/logo-as.png"
+                alt="Daily Bap Assamese Logo"
+                fill
+                className={`transition-opacity duration-700 absolute inset-0 object-contain ${
+                  isAssamese ? "opacity-100" : "opacity-0"
+                }`}
+              />
+            </div>
+            <div className="flex flex-col leading-none">
+              <span className="text-white font-display text-2xl font-bold tracking-tight group-hover:text-brand-accent transition-colors">
+                {siteConfig.name}
+              </span>
+              <span className="text-brand-accent text-[10px] font-medium tracking-[0.2em] uppercase">
+                Korean Kitchen
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Nav Links */}

@@ -88,7 +88,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 Add some delicious Korean food from the menu!
               </p>
               <button
-                onClick={onClose}
+                onClick={() => {
+                  onClose();
+                  document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" });
+                }}
                 className="text-brand-accent text-sm font-semibold hover:underline"
               >
                 Browse Menu →

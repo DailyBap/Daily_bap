@@ -1,18 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import Image from "next/image";
 import { siteConfig } from "@/config/brand";
 import { ChevronDown } from "lucide-react";
-
-// Dynamically import the 3D viewer to avoid SSR issues
-const BentoViewer = dynamic(() => import("./BentoViewer"), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center">
-      <div className="w-24 h-24 rounded-full border-4 border-brand-accent border-t-transparent animate-spin" />
-    </div>
-  ),
-});
 
 interface HeroSectionProps {
   onOrderClick: () => void;
@@ -91,21 +81,16 @@ export default function HeroSection({ onOrderClick }: HeroSectionProps) {
             </div>
           </div>
 
-          {/* Right — 3D Bento Viewer */}
+          {/* Right — Static Food Image Presentation */}
           <div className="relative flex items-center justify-center lg:justify-end">
-            <div className="relative w-full max-w-lg aspect-square">
-              {/* Glow background */}
-              <div className="absolute inset-0 bg-brand-accent/10 rounded-full blur-3xl scale-90" />
-
-              {/* 3D Canvas */}
-              <div className="relative w-full h-full rounded-3xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-sm">
-                <BentoViewer />
-              </div>
-
-              {/* Floating label */}
-              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-brand-accent/90 backdrop-blur-sm text-white text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap shadow-lg">
-                ✦ Drag to explore your bowl
-              </div>
+            <div className="h-[400px] md:h-[500px] w-full relative">
+              <Image
+                alt="Daily Bap Premium Bowl"
+                className="object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500"
+                fill
+                src="/hero-food.png"
+                priority
+              />
             </div>
           </div>
         </div>
