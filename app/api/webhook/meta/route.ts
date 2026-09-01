@@ -189,16 +189,21 @@ export async function POST(req: Request) {
                     userId = newUser.id;
                   }
 
-                  // DB Insert into Neon using Drizzle
+                  // Calculate a fallback totalAmount to satisfy notNull() constraint (e.g. ₹299 bento + ₹50 delivery)
+                  const priceMatch = orderSummary.match(/₹?\s*(\d+)/);
+                  const fallbackTotal = priceMatch ? parseInt(priceMatch[1], 10) : 349;
+                  const deliveryFee = 50;
+
+                  // DB Insert into Neon using Drizzle matching lib/schema.ts
                   await db.insert(orders).values({
                     userId,
-                    customerName,
-                    customerPhone: whatsappNumber,
+                    items: [{ summary: orderSummary }] as unknown as Record<string, unknown>[],
+                    totalAmount: fallbackTotal,
+                    deliveryFee,
                     deliveryAddress: address,
                     status: "pending",
-                    items: orderSummary as any,
-                    platform: "meta_dm",
-                  } as any);
+                    whatsappSent: "meta_dm",
+                  });
 
                   // Resend Email notification to admin
                   await resend.emails.send({

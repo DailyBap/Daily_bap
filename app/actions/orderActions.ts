@@ -2,7 +2,6 @@
 
 "use server";
 
-import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { users, orders } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
@@ -17,13 +16,15 @@ interface PlaceOrderPayload {
 }
 
 /**
- * Server Action: Save the order to Neon DB and redirect to WhatsApp.
+ * Server Action: Save the order to Neon DB and return WhatsApp deep link.
  * 1. Upsert user by phone number
  * 2. Insert order record (status: pending)
  * 3. Generate WhatsApp deep-link
- * 4. Redirect browser to wa.me URL
+ * 4. Return { success: true, whatsappUrl }
  */
-export async function placeOrder(payload: PlaceOrderPayload): Promise<void> {
+export async function placeOrder(
+  payload: PlaceOrderPayload
+): Promise<{ success: boolean; whatsappUrl: string }> {
   const { items, customer, subtotal, deliveryFee } = payload;
   const total = subtotal + deliveryFee;
 
@@ -63,19 +64,19 @@ export async function placeOrder(payload: PlaceOrderPayload): Promise<void> {
     });
 
     // 3. Generate WhatsApp deep-link
-    const whatsappUrl = generateWhatsAppLink(items, customer, subtotal, deliveryFee);
+    const whatsappUrl = generateWhatsAppLink(
+      items,
+      customer,
+      subtotal,
+      deliveryFee
+    );
 
-    // 4. Redirect to WhatsApp
-    redirect(whatsappUrl);
+    // 4. Return result to client
+    return { success: true, whatsappUrl };
   } catch (error) {
-    // If the error is a Next.js redirect, rethrow it (it's not an actual error)
-    if (
-      error instanceof Error &&
-      error.message === "NEXT_REDIRECT"
-    ) {
-      throw error;
-    }
     console.error("[placeOrder] Error saving order:", error);
-    throw new Error("Failed to place order. Please try again or contact us on WhatsApp.");
+    throw new Error(
+      "Failed to place order. Please try again or contact us on WhatsApp."
+    );
   }
 }

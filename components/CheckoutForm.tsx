@@ -44,12 +44,24 @@ export default function CheckoutForm() {
     setErrors({});
 
     startTransition(async () => {
-      await placeOrder({
-        items,
-        customer: customerInfo,
-        subtotal: getSubtotal(),
-        deliveryFee: getDeliveryFee(),
-      });
+      try {
+        const res = await placeOrder({
+          items,
+          customer: customerInfo,
+          subtotal: getSubtotal(),
+          deliveryFee: getDeliveryFee(),
+        });
+
+        if (res?.success && res?.whatsappUrl) {
+          window.location.href = res.whatsappUrl;
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to place order. Please try again.";
+        setErrors({ submit: message });
+      }
     });
   };
 

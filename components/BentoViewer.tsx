@@ -2,15 +2,19 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
-  OrbitControls,
-  MeshDistortMaterial,
+  PresentationControls,
   Float,
-  useGLTF,
-  Center,
   Environment,
   ContactShadows,
-  BakeShadows,
+  useGLTF,
+  Center,
+  MeshDistortMaterial,
 } from "@react-three/drei";
+import {
+  EffectComposer,
+  DepthOfField,
+  Bloom,
+} from "@react-three/postprocessing";
 import { useRef, Suspense, useMemo } from "react";
 import type { Group, Mesh } from "three";
 
@@ -46,7 +50,7 @@ function GltfModel({ url }: { url: string }) {
   );
 }
 
-// Preload the added model
+// Preload the 3D asset
 useGLTF.preload("/bibimbap.glb");
 
 // ----------------------------------------------------------
@@ -124,18 +128,6 @@ function BowlMesh() {
         <sphereGeometry args={[0.18, 16, 16]} />
         <meshStandardMaterial color="#f5cc42" roughness={0.5} />
       </mesh>
-
-      {/* Sesame dots */}
-      {[
-        [-0.1, 0.35, 0.1] as [number, number, number],
-        [0.15, 0.37, -0.05] as [number, number, number],
-        [-0.15, 0.36, -0.15] as [number, number, number],
-      ].map((pos, i) => (
-        <mesh key={`sesame-${i}`} position={pos}>
-          <sphereGeometry args={[0.035, 8, 8]} />
-          <meshStandardMaterial color="#d4a857" />
-        </mesh>
-      ))}
     </group>
   );
 }
@@ -192,30 +184,16 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
         gl={{ antialias: true, toneMappingExposure: 1.15 }}
         dpr={[1, 2]}
       >
-        {/* Environment HDRI Lighting for crisp PBR materials & reflections */}
-        <Environment preset="city" environmentIntensity={0.8} />
+        {/* Environment HDRI Lighting */}
+        <Environment preset="city" environmentIntensity={1.2} />
 
-        {/* Studio Direct Lighting */}
-        <ambientLight intensity={0.6} color="#fff8f0" />
-        <directionalLight
-          position={[5, 9, 5]}
-          intensity={1.5}
-          color="#ffffff"
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-bias={-0.0001}
-        />
-        <directionalLight position={[-4, 3, -3]} intensity={0.5} color="#9da613" />
-        <pointLight position={[0, 4, 1]} intensity={0.8} color="#f5cc42" distance={10} />
-
-        {/* Soft Floor Shadow */}
+        {/* Realistic Floor Shadow */}
         <ContactShadows
-          position={[0, -1.1, 0]}
-          opacity={0.65}
-          scale={8}
+          position={[0, -1.4, 0]}
+          opacity={0.75}
+          scale={10}
           blur={2.5}
           far={4}
-          color="#223311"
         />
 
         <Suspense
@@ -225,21 +203,33 @@ export default function BentoViewer({ modelRef }: { modelRef?: string }) {
             </Float>
           }
         >
-          <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.35}>
-            <GltfModel url={modelUrl} />
-          </Float>
+          <PresentationControls
+            global
+            snap={{ mass: 2, tension: 400 }}
+            polar={[-0.4, 0.2]}
+            azimuth={[-1, 0.75]}
+          >
+            <Float speed={1.5} rotationIntensity={0.4} floatIntensity={2}>
+              <GltfModel url={modelUrl} />
+            </Float>
+          </PresentationControls>
           <FloatingIngredients />
         </Suspense>
 
-        {/* Orbit Controls */}
-        <OrbitControls
-          enablePan={false}
-          minDistance={2.8}
-          maxDistance={6.5}
-          maxPolarAngle={Math.PI / 2.1}
-          autoRotate
-          autoRotateSpeed={0.9}
-        />
+        {/* Post-processing effects */}
+        <EffectComposer disableNormalPass>
+          <DepthOfField
+            target={[0, 0, 0]}
+            focalLength={0.5}
+            height={700}
+            bokehScale={5}
+          />
+          <Bloom
+            luminanceThreshold={1}
+            intensity={0.5}
+            mipmapBlur
+          />
+        </EffectComposer>
       </Canvas>
     </div>
   );
