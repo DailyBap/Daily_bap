@@ -11,7 +11,7 @@ import type { MenuItem, FoodPrinciple, HowToEatStep, ProcessStep } from "@/types
 // ----------------------------------------------------------
 export const siteConfig = {
   name: "Daily Bap",
-  tagline: "Authentic Korean comfort food, freshly prepared and delivered across Guwahati.",
+  tagline: "Homestyle Seoul flavors, freshly prepared in small batches and delivered straight to your door across Guwahati.",
   shortTagline: "Korean Comfort Food. Made Fresh. Just For You.",
   description:
     "100% pre-order Korean cloud kitchen based in Guwahati, Assam. Every meal cooked specifically for your order — zero waste, maximum freshness.",
@@ -105,7 +105,7 @@ export const processSteps: ProcessStep[] = [
 export const whyPreOrder = {
   heading: "WHY PRE-ORDER?",
   subheading: "Less Waste. More Freshness.",
-  body: "We don't cook large batches and wait for them to sell. Every Bap is made specifically for an order helping us reduce waste while giving you a fresher meal.",
+  body: "We don't cook large batches and wait for them to sell. Every Bap is made specifically for your order, helping us reduce waste while giving you a fresher meal.",
 } as const;
 
 // ----------------------------------------------------------
@@ -159,7 +159,7 @@ export const bentoBoxes: MenuItem[] = [
     category: "bento",
     price: 299,
     description:
-      "Crisp tofu or soft paneer glazed in our signature sweet-soy sauce, served with wok-tossed seasonal greens.",
+      "Crisp tofu or soft paneer (our local twist!) glazed in our signature sweet-soy sauce, served with wok-tossed seasonal greens.",
     tags: ["vegetarian"],
     modelRef: "bowl-tofu",
     isVegetarian: true,
@@ -309,8 +309,8 @@ export const howToEat: HowToEatStep[] = [
   },
   {
     step: "03",
-    heading: "MIX IT UP",
-    body: "For Bibimbap, give everything a good mix and let the gochujang find its way through the bowl.",
+    heading: "MIX IT UP (OR DON'T)",
+    body: "For bowls, give everything a good mix so the gochujang coats every grain of rice. For bentos, pair each bite as you please.",
   },
   {
     step: "04",
@@ -329,6 +329,6 @@ export const howToEat: HowToEatStep[] = [
 // ----------------------------------------------------------
 export const readySection = {
   heading: "READY FOR YOUR BAP?",
-  subheading: "Fresh Korean comfort food, prepared to order and delivered fresh in Guwahati.",
+  subheading: "Authentic Korean comfort food, prepared to order and delivered fresh across Guwahati.",
   tagline: "PRE-ORDER • COOK FRESH • ENJOY",
 } as const;
