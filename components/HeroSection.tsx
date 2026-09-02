@@ -70,7 +70,7 @@ export default function HeroSection({ onOrderClick }: HeroSectionProps) {
             <div className="flex gap-8 pt-4 border-t border-white/10">
               {[
                 { label: "Pre-Order", value: "100%" },
-                { label: "Delivery Radius", value: "5km" },
+                { label: "Delivery Radius", value: "10km" },
                 { label: "Menu Items", value: "9+" },
               ].map((stat) => (
                 <div key={stat.label} className="flex flex-col">

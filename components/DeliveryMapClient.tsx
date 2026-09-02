@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, Circle } from "react-leaflet";
 import { useCartStore } from "@/store/useCartStore";
-import { checkDeliveryZone, KITCHEN_COORDS, DELIVERY_RADIUS_KM } from "@/lib/geo";
+import {
+  checkDeliveryZone,
+  KITCHEN_COORDS,
+  FREE_DELIVERY_RADIUS_KM,
+  MAX_DELIVERY_RADIUS_KM,
+} from "@/lib/geo";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -26,7 +30,7 @@ const userIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-// Kitchen marker icon (red)
+// Kitchen marker icon (brand color)
 const kitchenIcon = new L.DivIcon({
   html: `<div style="background:#445916;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`,
   className: "",
@@ -45,7 +49,7 @@ function PinDropper() {
       const { lat, lng } = e.latlng;
       const { isDeliverable, distanceKm } = checkDeliveryZone(lat, lng);
       setCustomerInfo({ lat, lng });
-      setDeliverable(isDeliverable);
+      setDeliverable(isDeliverable, distanceKm);
     },
   });
 
@@ -59,9 +63,9 @@ function PinDropper() {
       eventHandlers={{
         dragend(e) {
           const { lat, lng } = e.target.getLatLng();
-          const { isDeliverable } = checkDeliveryZone(lat, lng);
+          const { isDeliverable, distanceKm } = checkDeliveryZone(lat, lng);
           setCustomerInfo({ lat, lng });
-          setDeliverable(isDeliverable);
+          setDeliverable(isDeliverable, distanceKm);
         },
       }}
     />
@@ -72,35 +76,48 @@ function PinDropper() {
 // Main DeliveryMap export
 // ----------------------------------------------------------
 export default function DeliveryMapClient() {
-  const { customerInfo, isDeliverable, setDeliverable } = useCartStore();
+  const { customerInfo, isDeliverable, distanceKm, getSubtotal } = useCartStore();
+  const subtotal = getSubtotal();
 
   return (
     <div className="relative w-full">
       {/* Status bar */}
       <div
-        className={`text-xs font-medium px-3 py-1.5 rounded-t-xl flex items-center gap-2 ${
+        className={`text-xs font-medium px-3.5 py-2 rounded-t-xl flex items-center justify-between ${
           isDeliverable
-            ? "bg-green-600 text-white"
+            ? "bg-[#445916] text-white"
             : customerInfo.lat
             ? "bg-red-500 text-white"
-            : "bg-brand-primary text-white"
+            : "bg-[#445916] text-white"
         }`}
       >
-        <span
-          className={`w-2 h-2 rounded-full ${
-            isDeliverable ? "bg-green-200" : "bg-white/50"
-          } animate-pulse`}
-        />
-        {isDeliverable
-          ? `✓ Within delivery zone — ${DELIVERY_RADIUS_KM}km radius`
-          : customerInfo.lat
-          ? `✗ Outside delivery zone — too far from our kitchen`
-          : `📍 Tap the map to drop your delivery pin`}
+        <div className="flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isDeliverable ? "bg-emerald-300" : "bg-white/50"
+            } animate-pulse`}
+          />
+          <span>
+            {isDeliverable
+              ? distanceKm != null && distanceKm <= FREE_DELIVERY_RADIUS_KM
+                ? `✓ Within FREE delivery zone (${distanceKm}km)`
+                : `✓ Serviceable zone (${distanceKm ?? "0"}km)`
+              : customerInfo.lat
+              ? `✗ Outside delivery zone (${distanceKm ?? "0"}km > ${MAX_DELIVERY_RADIUS_KM}km max)`
+              : `📍 Tap the map to drop your delivery pin`}
+          </span>
+        </div>
+
+        {isDeliverable && distanceKm != null && distanceKm > FREE_DELIVERY_RADIUS_KM && (
+          <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
+            {subtotal >= 1000 ? "FREE (₹1000+)" : "₹50 fee"}
+          </span>
+        )}
       </div>
 
       <MapContainer
         center={[KITCHEN_COORDS.lat, KITCHEN_COORDS.lng]}
-        zoom={13}
+        zoom={12}
         style={{ height: "280px", width: "100%", borderRadius: "0 0 16px 16px" }}
         scrollWheelZoom={false}
       >
@@ -109,14 +126,27 @@ export default function DeliveryMapClient() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Delivery zone circle */}
+        {/* 1. Inner Circle — 3km Free Delivery Boundary */}
         <Circle
           center={[KITCHEN_COORDS.lat, KITCHEN_COORDS.lng]}
-          radius={DELIVERY_RADIUS_KM * 1000}
+          radius={FREE_DELIVERY_RADIUS_KM * 1000}
+          pathOptions={{
+            color: "#10B981",
+            fillColor: "#10B981",
+            fillOpacity: 0.1,
+            weight: 2,
+            dashArray: "4 4",
+          }}
+        />
+
+        {/* 2. Outer Circle — 10km Maximum Delivery Boundary */}
+        <Circle
+          center={[KITCHEN_COORDS.lat, KITCHEN_COORDS.lng]}
+          radius={MAX_DELIVERY_RADIUS_KM * 1000}
           pathOptions={{
             color: "#445916",
             fillColor: "#9da613",
-            fillOpacity: 0.08,
+            fillOpacity: 0.05,
             weight: 2,
             dashArray: "8 4",
           }}

@@ -33,7 +33,9 @@ export function generateWhatsAppLink(
 
   const deliveryLine =
     deliveryFee === 0
-      ? "  🎉 Delivery: FREE (order above ₹1000)"
+      ? subtotal >= 1000
+        ? "  🎉 Delivery: FREE (order above ₹1000)"
+        : "  🎉 Delivery: FREE (within 3km zone)"
       : `  🛵 Delivery: ₹${deliveryFee}`;
 
   const timeSlotLine = deliverySlotLabel

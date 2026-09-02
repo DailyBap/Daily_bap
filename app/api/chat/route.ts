@@ -9,7 +9,13 @@ import {
   menuData,
   processSteps,
 } from "@/config/brand";
-import { checkDeliveryZone as checkGeoDeliveryZone, KITCHEN_COORDS, DELIVERY_RADIUS_KM } from "@/lib/geo";
+import {
+  checkDeliveryZone as checkGeoDeliveryZone,
+  KITCHEN_COORDS,
+  MAX_DELIVERY_RADIUS_KM,
+  FREE_DELIVERY_RADIUS_KM,
+  calculateDeliveryFee,
+} from "@/lib/geo";
 import { db } from "@/lib/db";
 import { users, orders, chatSessions } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
@@ -91,8 +97,11 @@ ${menuData.addOns
 DELIVERY & PRICING POLICIES
 ========================================
 - Kitchen Location: Guwahati (Lat: ${KITCHEN_COORDS.lat}, Lng: ${KITCHEN_COORDS.lng})
-- Delivery Radius: ${DELIVERY_RADIUS_KM} km from kitchen
-- Delivery Fee: Flat ₹50 (FREE delivery on orders ₹1000 and above)
+- Delivery Radius: ${MAX_DELIVERY_RADIUS_KM} km from kitchen
+- Delivery Fee Tiers:
+  • 0–3 km: FREE delivery (₹0) regardless of subtotal.
+  • 3–10 km: ₹50 flat delivery fee (FREE on orders ₹1000 and above).
+  • >10 km: Outside delivery zone (cannot deliver).
 - Model: 100% Pre-order cloud kitchen. Every meal is cooked fresh specifically for the order.
 `;
 
@@ -104,7 +113,7 @@ YOUR PERSONA & CONVERSATION RULES:
 2. HYPE UP ORDERS & SUGGEST ELITE PAIRINGS: When a customer picks an item, hype up their choice enthusiastically and suggest an elite pairing (e.g., adding an extra fried egg for ₹30, House-Made Kimchi for ₹100, spicy gochujang mayo for ₹40, or pickled radish for ₹60).
 3. SINGLE SOURCE OF TRUTH: Rely ONLY on the menu items, prices, descriptions, and principles provided below from our brand configuration. Never hallucinate fake items or wrong prices.
 4. 100% PRE-ORDER MODEL: We cook every single meal fresh specifically for the order (zero food waste, maximum freshness).
-5. DELIVERY CHECK FLOW: When the customer mentions their location, area, or coordinates in Guwahati, use the checkDeliveryZone tool. Remind them delivery is ₹50 flat, or FREE on orders ₹1000+.
+5. DELIVERY CHECK FLOW: When the customer mentions their location, area, or coordinates in Guwahati, use the checkDeliveryZone tool. Remind them delivery is FREE within 3km, flat ₹50 for 3-10km, or FREE on orders ₹1000+.
 6. ORDERING & FINALIZATION:
    To place an order, make sure you have:
    - Customer Full Name
@@ -136,7 +145,7 @@ export async function POST(req: Request) {
       tools: {
         checkDeliveryZone: tool({
           description:
-            "Check if a customer location coordinates (latitude and longitude) or address in Guwahati falls within the 5km delivery radius of Daily Bap kitchen.",
+            "Check if customer location coordinates (latitude and longitude) or address in Guwahati falls within the 10km delivery radius of Daily Bap kitchen.",
           parameters: z.object({
             lat: z.number().describe("Latitude of customer location"),
             lng: z.number().describe("Longitude of customer location"),
@@ -147,14 +156,19 @@ export async function POST(req: Request) {
           }),
           execute: async ({ lat, lng, address }) => {
             const geoResult = checkGeoDeliveryZone(lat, lng);
+            const isFreeZone = geoResult.distanceKm <= FREE_DELIVERY_RADIUS_KM;
+
             return {
               isDeliverable: geoResult.isDeliverable,
               distanceKm: geoResult.distanceKm,
-              maxRadiusKm: DELIVERY_RADIUS_KM,
+              maxRadiusKm: MAX_DELIVERY_RADIUS_KM,
+              isFreeTier: isFreeZone,
               address: address || "Guwahati",
               message: geoResult.isDeliverable
-                ? `Great news! Location is ${geoResult.distanceKm} km away, well within our ${DELIVERY_RADIUS_KM} km delivery zone.`
-                : `Sorry, location is ${geoResult.distanceKm} km away, which exceeds our ${DELIVERY_RADIUS_KM} km delivery radius.`,
+                ? isFreeZone
+                  ? `Great news! Location is ${geoResult.distanceKm} km away, within our FREE delivery 3km zone.`
+                  : `Great news! Location is ${geoResult.distanceKm} km away, within our ${MAX_DELIVERY_RADIUS_KM} km delivery zone. Delivery fee is ₹50 (FREE on orders ₹1000+).`
+                : `Sorry, location is ${geoResult.distanceKm} km away, which exceeds our ${MAX_DELIVERY_RADIUS_KM} km delivery radius.`,
             };
           },
         }),
@@ -198,7 +212,10 @@ export async function POST(req: Request) {
                 (sum, item) => sum + item.price * item.quantity,
                 0
               );
-              const deliveryFee = subtotal >= 1000 ? 0 : 50;
+
+              // Calculate delivery fee using shared tier calculator
+              const feeResult = calculateDeliveryFee(null, subtotal);
+              const deliveryFee = feeResult.fee;
               const total = subtotal + deliveryFee;
 
               const cleanPhone = customerPhone.replace(/\D/g, "");

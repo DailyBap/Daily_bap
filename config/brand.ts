@@ -24,7 +24,7 @@ export const siteConfig = {
   model: "100% Pre-Order",
   cta: "Pre-Order Now",
   notice:
-    "PRE-ORDER REQUIRED • DELIVERY CHARGES EXTRA • (V) VEGETARIAN • ALLERGIES? PLEASE INFORM US WHEN ORDERING",
+    "PRE-ORDER REQUIRED • FREE DELIVERY WITHIN 3KM • FLAT ₹50 FOR 3-10KM (FREE ABOVE ₹1000) • (V) VEGETARIAN",
 } as const;
 
 // ----------------------------------------------------------

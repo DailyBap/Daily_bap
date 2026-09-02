@@ -3,9 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { CartItem, CustomerInfo } from "@/types";
-
-const DELIVERY_THRESHOLD = 1000; // Free delivery above ₹1000
-const FLAT_DELIVERY_FEE = 50;    // ₹50 flat delivery fee
+import { calculateDeliveryFee } from "@/lib/geo";
 
 interface CartState {
   // Cart items
@@ -16,6 +14,7 @@ interface CartState {
 
   // Delivery zone state
   isDeliverable: boolean;
+  distanceKm: number | null;
 
   // Requested delivery time slot
   requestedDeliveryTime: string | null;
@@ -27,7 +26,7 @@ interface CartState {
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
   setCustomerInfo: (info: Partial<CustomerInfo>) => void;
-  setDeliverable: (value: boolean) => void;
+  setDeliverable: (value: boolean, distanceKm?: number | null) => void;
   setDeliverySlot: (time: Date | string | null, label: string | null) => void;
 
   // Computed (as functions to avoid stale state)
@@ -43,6 +42,7 @@ export const useCartStore = create<CartState>()(
       items: [],
       customerInfo: { name: "", phone: "", address: "" },
       isDeliverable: false,
+      distanceKm: null,
       requestedDeliveryTime: null,
       deliverySlotLabel: null,
 
@@ -79,6 +79,7 @@ export const useCartStore = create<CartState>()(
       clearCart: () =>
         set({
           items: [],
+          distanceKm: null,
           requestedDeliveryTime: null,
           deliverySlotLabel: null,
         }),
@@ -88,7 +89,8 @@ export const useCartStore = create<CartState>()(
           customerInfo: { ...state.customerInfo, ...info },
         })),
 
-      setDeliverable: (value) => set({ isDeliverable: value }),
+      setDeliverable: (value, distanceKm = null) =>
+        set({ isDeliverable: value, distanceKm: distanceKm ?? null }),
 
       setDeliverySlot: (time, label) =>
         set({
@@ -104,7 +106,8 @@ export const useCartStore = create<CartState>()(
 
       getDeliveryFee: () => {
         const subtotal = get().getSubtotal();
-        return subtotal >= DELIVERY_THRESHOLD ? 0 : FLAT_DELIVERY_FEE;
+        const { distanceKm } = get();
+        return calculateDeliveryFee(distanceKm, subtotal).fee;
       },
 
       getTotal: () => {
@@ -121,6 +124,7 @@ export const useCartStore = create<CartState>()(
       partialize: (state) => ({
         items: state.items,
         customerInfo: state.customerInfo,
+        distanceKm: state.distanceKm,
         requestedDeliveryTime: state.requestedDeliveryTime,
         deliverySlotLabel: state.deliverySlotLabel,
       }),

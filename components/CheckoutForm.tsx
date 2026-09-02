@@ -40,7 +40,7 @@ export default function CheckoutForm() {
     if (!customerInfo.address.trim() || customerInfo.address.length < 10)
       newErrors.address = "Please enter a full delivery address";
     if (!isDeliverable)
-      newErrors.zone = "Your location is outside our delivery zone (5km radius)";
+      newErrors.zone = "Your location is outside our delivery zone (10km radius)";
     if (!requestedDeliveryTime || !deliverySlotLabel)
       newErrors.slot = "Please select a delivery time slot";
 

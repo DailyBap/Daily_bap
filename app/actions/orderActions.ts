@@ -6,6 +6,12 @@ import { db } from "@/lib/db";
 import { users, orders } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
+import {
+  calculateDeliveryFee,
+  haversineDistance,
+  KITCHEN_COORDS,
+  MAX_DELIVERY_RADIUS_KM,
+} from "@/lib/geo";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
 import { eq, count } from "drizzle-orm";
 import type { CartItem, CustomerInfo } from "@/types";
@@ -49,10 +55,11 @@ export async function getSlotCapacities(): Promise<Record<string, number>> {
 /**
  * Server Action: Save the order to Neon DB and return WhatsApp deep link.
  * 1. Validate requested delivery slot server-side
- * 2. Check slot capacity
- * 3. Upsert user by phone number
- * 4. Insert order record (status: pending)
- * 5. Generate WhatsApp deep-link with order tracking link & slot label
+ * 2. Recalculate distance and delivery fee server-side (never trust client fee)
+ * 3. Check slot capacity
+ * 4. Upsert user by phone number
+ * 5. Insert order record (status: pending)
+ * 6. Generate WhatsApp deep-link with order tracking link & slot label
  */
 export async function placeOrder(
   payload: PlaceOrderPayload
@@ -61,11 +68,9 @@ export async function placeOrder(
     items,
     customer,
     subtotal,
-    deliveryFee,
     requestedDeliveryTime,
     deliverySlotLabel,
   } = payload;
-  const total = subtotal + deliveryFee;
 
   // 1. Server-side validation of requested delivery time slot
   if (!requestedDeliveryTime || !deliverySlotLabel) {
@@ -78,7 +83,28 @@ export async function placeOrder(
     throw new Error(valResult.reason || "Invalid delivery time slot.");
   }
 
-  // 2. Capacity Guard Check
+  // 2. Server-side distance & delivery fee calculation
+  let distanceKm: number | null = null;
+  if (customer.lat != null && customer.lng != null) {
+    distanceKm = haversineDistance(
+      KITCHEN_COORDS.lat,
+      KITCHEN_COORDS.lng,
+      customer.lat,
+      customer.lng
+    );
+
+    if (distanceKm > MAX_DELIVERY_RADIUS_KM) {
+      throw new Error(
+        `Your location is ${Math.round(distanceKm * 10) / 10}km away, which exceeds our maximum ${MAX_DELIVERY_RADIUS_KM}km delivery radius.`
+      );
+    }
+  }
+
+  const feeResult = calculateDeliveryFee(distanceKm, subtotal);
+  const validatedDeliveryFee = feeResult.fee;
+  const total = subtotal + validatedDeliveryFee;
+
+  // 3. Capacity Guard Check
   const existingSlotOrders = await db
     .select({ count: count(orders.id) })
     .from(orders)
@@ -92,7 +118,7 @@ export async function placeOrder(
   }
 
   try {
-    // 3. Find or create user
+    // 4. Find or create user
     let userId: string;
     const cleanPhone = customer.phone.replace(/\D/g, "");
 
@@ -116,14 +142,14 @@ export async function placeOrder(
       userId = newUser.id;
     }
 
-    // 4. Insert order record
+    // 5. Insert order record
     const [newOrder] = await db
       .insert(orders)
       .values({
         userId,
         items: items as unknown as Record<string, unknown>[],
         totalAmount: total,
-        deliveryFee,
+        deliveryFee: validatedDeliveryFee,
         deliveryAddress: customer.address,
         requestedDeliveryTime: timeDate,
         deliverySlotLabel,
@@ -132,12 +158,12 @@ export async function placeOrder(
       })
       .returning({ id: orders.id });
 
-    // 5. Generate WhatsApp deep-link
+    // 6. Generate WhatsApp deep-link
     const whatsappUrl = generateWhatsAppLink(
       items,
       customer,
       subtotal,
-      deliveryFee,
+      validatedDeliveryFee,
       deliverySlotLabel,
       newOrder.id
     );
