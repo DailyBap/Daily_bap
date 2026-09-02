@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Image from "next/image";
 import { siteConfig, HERO_IMAGES } from "@/config/brand";
 import { ChevronDown } from "lucide-react";
@@ -10,33 +9,8 @@ interface HeroSectionProps {
 }
 
 export default function HeroSection({ onOrderClick }: HeroSectionProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  // Detect prefers-reduced-motion setting
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mediaQuery.matches);
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setReducedMotion(e.matches);
-    };
-
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
-
-  // Auto-advance slides every 4.5 seconds
-  useEffect(() => {
-    if (reducedMotion || isPaused) return;
-
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % HERO_IMAGES.length);
-    }, 4500);
-
-    return () => clearInterval(interval);
-  }, [reducedMotion, isPaused]);
+  // Pre-defined scattered rotation angles for photo collage effect
+  const rotations = ["rotate-[-3deg]", "rotate-[3deg]", "rotate-[-1deg]", "rotate-[2deg]"];
 
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden bg-brand-primary">
@@ -49,8 +23,8 @@ export default function HeroSection({ onOrderClick }: HeroSectionProps) {
         }}
       />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12 w-full">
-        <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[calc(100vh-4rem)]">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 w-full">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center min-h-[calc(100vh-5rem)]">
           {/* Left — Text Content */}
           <div className="flex flex-col justify-center space-y-8">
             {/* Badge */}
@@ -111,60 +85,29 @@ export default function HeroSection({ onOrderClick }: HeroSectionProps) {
             </div>
           </div>
 
-          {/* Right — Food Image Slider */}
-          <div
-            className="relative flex flex-col items-center justify-center lg:justify-end"
-            onMouseEnter={() => setIsPaused(true)}
-            onMouseLeave={() => setIsPaused(false)}
-            onTouchStart={() => setIsPaused(true)}
-            onTouchEnd={() => setIsPaused(false)}
-          >
-            <div className="h-[380px] sm:h-[460px] md:h-[520px] w-full relative rounded-3xl overflow-hidden shadow-2xl bg-black/10">
-              {HERO_IMAGES.map((imgSrc, index) => {
-                const isActive = index === currentIndex;
-                const showStatic = reducedMotion && index === 0;
-
-                if (reducedMotion && index !== 0) return null;
+          {/* Right — Static Scattered Dish Photo Collage */}
+          <div className="relative flex items-center justify-center">
+            <div className="w-full grid grid-cols-2 gap-4 sm:gap-6 max-w-md lg:max-w-none">
+              {HERO_IMAGES.map((imgSrc, idx) => {
+                const rotationClass = rotations[idx % rotations.length];
 
                 return (
                   <div
                     key={imgSrc}
-                    className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-                      isActive || showStatic
-                        ? "opacity-100 z-10"
-                        : "opacity-0 z-0 pointer-events-none"
-                    }`}
+                    className={`relative aspect-square sm:aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl border-4 border-white/20 bg-black/20 transform ${rotationClass} hover:rotate-0 hover:scale-105 hover:z-20 transition-all duration-500`}
                   >
                     <Image
-                      alt={`Daily Bap Korean Dish ${index + 1}`}
-                      className="object-cover rounded-3xl transform hover:scale-105 transition-transform duration-700"
-                      fill
+                      alt={`Daily Bap Dish ${idx + 1}`}
                       src={imgSrc}
-                      priority={index === 0}
-                      sizes="(max-width: 768px) 100vw, 50vw"
+                      fill
+                      priority={idx === 0}
+                      className="object-cover"
+                      sizes="(max-width: 768px) 50vw, 25vw"
                     />
                   </div>
                 );
               })}
             </div>
-
-            {/* Dot Navigation Indicators */}
-            {!reducedMotion && (
-              <div className="flex items-center gap-2 mt-4 z-20">
-                {HERO_IMAGES.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentIndex(idx)}
-                    aria-label={`Jump to slide ${idx + 1}`}
-                    className={`h-2.5 rounded-full transition-all duration-300 ${
-                      idx === currentIndex
-                        ? "w-8 bg-brand-accent"
-                        : "w-2.5 bg-white/30 hover:bg-white/60"
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
