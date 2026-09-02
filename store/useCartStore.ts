@@ -17,6 +17,10 @@ interface CartState {
   // Delivery zone state
   isDeliverable: boolean;
 
+  // Requested delivery time slot
+  requestedDeliveryTime: string | null;
+  deliverySlotLabel: string | null;
+
   // Actions
   addItem: (item: Omit<CartItem, "quantity">) => void;
   removeItem: (id: string) => void;
@@ -24,6 +28,7 @@ interface CartState {
   clearCart: () => void;
   setCustomerInfo: (info: Partial<CustomerInfo>) => void;
   setDeliverable: (value: boolean) => void;
+  setDeliverySlot: (time: Date | string | null, label: string | null) => void;
 
   // Computed (as functions to avoid stale state)
   getSubtotal: () => number;
@@ -38,6 +43,8 @@ export const useCartStore = create<CartState>()(
       items: [],
       customerInfo: { name: "", phone: "", address: "" },
       isDeliverable: false,
+      requestedDeliveryTime: null,
+      deliverySlotLabel: null,
 
       addItem: (newItem) =>
         set((state) => {
@@ -69,7 +76,12 @@ export const useCartStore = create<CartState>()(
           };
         }),
 
-      clearCart: () => set({ items: [] }),
+      clearCart: () =>
+        set({
+          items: [],
+          requestedDeliveryTime: null,
+          deliverySlotLabel: null,
+        }),
 
       setCustomerInfo: (info) =>
         set((state) => ({
@@ -77,6 +89,13 @@ export const useCartStore = create<CartState>()(
         })),
 
       setDeliverable: (value) => set({ isDeliverable: value }),
+
+      setDeliverySlot: (time, label) =>
+        set({
+          requestedDeliveryTime:
+            time instanceof Date ? time.toISOString() : time,
+          deliverySlotLabel: label,
+        }),
 
       getSubtotal: () => {
         const { items } = get();
@@ -102,6 +121,8 @@ export const useCartStore = create<CartState>()(
       partialize: (state) => ({
         items: state.items,
         customerInfo: state.customerInfo,
+        requestedDeliveryTime: state.requestedDeliveryTime,
+        deliverySlotLabel: state.deliverySlotLabel,
       }),
     }
   )

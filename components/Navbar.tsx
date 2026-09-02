@@ -47,20 +47,20 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="relative w-10 h-10">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/20 shadow-xs shrink-0 bg-white/10">
               <Image
-                src="/logo-en.png"
+                src="/English_logo.jpg"
                 alt="Daily Bap English Logo"
                 fill
-                className={`transition-opacity duration-700 absolute inset-0 object-contain ${
+                className={`transition-opacity duration-700 absolute inset-0 object-cover ${
                   isAssamese ? "opacity-0" : "opacity-100"
                 }`}
               />
               <Image
-                src="/logo-as.png"
+                src="/Axomia_logo.png"
                 alt="Daily Bap Assamese Logo"
                 fill
-                className={`transition-opacity duration-700 absolute inset-0 object-contain ${
+                className={`transition-opacity duration-700 absolute inset-0 object-cover ${
                   isAssamese ? "opacity-100" : "opacity-0"
                 }`}
               />

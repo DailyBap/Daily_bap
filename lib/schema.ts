@@ -46,6 +46,8 @@ export const orders = pgTable("orders", {
   totalAmount: integer("total_amount").notNull(), // in ₹
   deliveryFee: integer("delivery_fee").notNull().default(50), // in ₹
   deliveryAddress: text("delivery_address").notNull(),
+  requestedDeliveryTime: timestamp("requested_delivery_time"),
+  deliverySlotLabel: text("delivery_slot_label"),
   status: orderStatusEnum("status").notNull().default("pending"),
   whatsappSent: text("whatsapp_sent").default("no"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

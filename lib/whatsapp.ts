@@ -5,6 +5,9 @@ import type { CartItem, CustomerInfo } from "@/types";
 const WHATSAPP_NUMBER =
   process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "919999999999";
 
+const BASE_URL =
+  process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
 /**
  * Formats the cart into a human-readable WhatsApp message
  * and returns a deep-link URL that opens the WA chat with
@@ -14,7 +17,9 @@ export function generateWhatsAppLink(
   items: CartItem[],
   customer: CustomerInfo,
   subtotal: number,
-  deliveryFee: number
+  deliveryFee: number,
+  deliverySlotLabel?: string | null,
+  orderId?: string | null
 ): string {
   const total = subtotal + deliveryFee;
 
@@ -31,6 +36,14 @@ export function generateWhatsAppLink(
       ? "  🎉 Delivery: FREE (order above ₹1000)"
       : `  🛵 Delivery: ₹${deliveryFee}`;
 
+  const timeSlotLine = deliverySlotLabel
+    ? `  ⏰ *Requested Delivery:* ${deliverySlotLabel}`
+    : "";
+
+  const trackingLine = orderId
+    ? `\n━━━━━━━━━━━━━━━━━━━━━━━\n📍 *TRACK YOUR ORDER:* ${BASE_URL}/orders/${orderId}`
+    : "";
+
   const message = `
 🍱 *NEW DAILY BAP PRE-ORDER*
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -41,11 +54,12 @@ ${itemLines}
   Subtotal: ₹${subtotal}
 ${deliveryLine}
   *TOTAL: ₹${total}*
+${timeSlotLine}
 ━━━━━━━━━━━━━━━━━━━━━━━
 *CUSTOMER DETAILS*
   👤 Name: ${customer.name}
   📞 Phone: ${customer.phone}
-  📍 Address: ${customer.address}
+  📍 Address: ${customer.address}${trackingLine}
 ━━━━━━━━━━━━━━━━━━━━━━━
 PRE-ORDER • COOK FRESH • ENJOY
   `.trim();

@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
-import { siteConfig } from "@/config/brand";
+import { siteConfig, HERO_IMAGES } from "@/config/brand";
 import { ChevronDown } from "lucide-react";
 
 interface HeroSectionProps {
@@ -9,20 +10,47 @@ interface HeroSectionProps {
 }
 
 export default function HeroSection({ onOrderClick }: HeroSectionProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  // Detect prefers-reduced-motion setting
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mediaQuery.matches);
+
+    const handleChange = (e: MediaQueryListEvent) => {
+      setReducedMotion(e.matches);
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  // Auto-advance slides every 4.5 seconds
+  useEffect(() => {
+    if (reducedMotion || isPaused) return;
+
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 4500);
+
+    return () => clearInterval(interval);
+  }, [reducedMotion, isPaused]);
+
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden bg-brand-primary">
       {/* Background texture pattern */}
       <div
-        className="absolute inset-0 opacity-5"
+        className="absolute inset-0 opacity-5 pointer-events-none"
         style={{
           backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
           backgroundSize: "40px 40px",
         }}
       />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12 w-full">
         <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[calc(100vh-4rem)]">
-
           {/* Left — Text Content */}
           <div className="flex flex-col justify-center space-y-8">
             {/* Badge */}
@@ -68,36 +96,81 @@ export default function HeroSection({ onOrderClick }: HeroSectionProps) {
             <div className="flex gap-8 pt-4 border-t border-white/10">
               {[
                 { label: "Pre-Order", value: "100%" },
-                { label: "Avg. Delivery", value: "5km" },
+                { label: "Delivery Radius", value: "5km" },
                 { label: "Menu Items", value: "9+" },
               ].map((stat) => (
                 <div key={stat.label} className="flex flex-col">
                   <span className="text-2xl font-bold text-brand-accent font-display">
                     {stat.value}
                   </span>
-                  <span className="text-white/50 text-xs tracking-wide">{stat.label}</span>
+                  <span className="text-white/50 text-xs tracking-wide">
+                    {stat.label}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right — Static Food Image Presentation */}
-          <div className="relative flex items-center justify-center lg:justify-end">
-            <div className="h-[400px] md:h-[500px] w-full relative">
-              <Image
-                alt="Daily Bap Premium Bowl"
-                className="object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500"
-                fill
-                src="/hero-food.png"
-                priority
-              />
+          {/* Right — Food Image Slider */}
+          <div
+            className="relative flex flex-col items-center justify-center lg:justify-end"
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
+            onTouchStart={() => setIsPaused(true)}
+            onTouchEnd={() => setIsPaused(false)}
+          >
+            <div className="h-[380px] sm:h-[460px] md:h-[520px] w-full relative rounded-3xl overflow-hidden shadow-2xl bg-black/10">
+              {HERO_IMAGES.map((imgSrc, index) => {
+                const isActive = index === currentIndex;
+                const showStatic = reducedMotion && index === 0;
+
+                if (reducedMotion && index !== 0) return null;
+
+                return (
+                  <div
+                    key={imgSrc}
+                    className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                      isActive || showStatic
+                        ? "opacity-100 z-10"
+                        : "opacity-0 z-0 pointer-events-none"
+                    }`}
+                  >
+                    <Image
+                      alt={`Daily Bap Korean Dish ${index + 1}`}
+                      className="object-cover rounded-3xl transform hover:scale-105 transition-transform duration-700"
+                      fill
+                      src={imgSrc}
+                      priority={index === 0}
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                    />
+                  </div>
+                );
+              })}
             </div>
+
+            {/* Dot Navigation Indicators */}
+            {!reducedMotion && (
+              <div className="flex items-center gap-2 mt-4 z-20">
+                {HERO_IMAGES.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentIndex(idx)}
+                    aria-label={`Jump to slide ${idx + 1}`}
+                    className={`h-2.5 rounded-full transition-all duration-300 ${
+                      idx === currentIndex
+                        ? "w-8 bg-brand-accent"
+                        : "w-2.5 bg-white/30 hover:bg-white/60"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30 animate-bounce">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30 animate-bounce">
         <span className="text-[10px] tracking-widest uppercase">Scroll</span>
         <ChevronDown size={16} />
       </div>

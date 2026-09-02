@@ -6,6 +6,7 @@ import { validatePhone } from "@/lib/whatsapp";
 import { useState, useTransition } from "react";
 import { User, Phone, MapPin, AlertCircle, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
+import DeliveryTimePicker from "./DeliveryTimePicker";
 
 const DeliveryMap = dynamic(() => import("./DeliveryMapClient"), {
   ssr: false,
@@ -17,8 +18,16 @@ const DeliveryMap = dynamic(() => import("./DeliveryMapClient"), {
 });
 
 export default function CheckoutForm() {
-  const { customerInfo, setCustomerInfo, items, getSubtotal, getDeliveryFee, isDeliverable } =
-    useCartStore();
+  const {
+    customerInfo,
+    setCustomerInfo,
+    items,
+    getSubtotal,
+    getDeliveryFee,
+    isDeliverable,
+    requestedDeliveryTime,
+    deliverySlotLabel,
+  } = useCartStore();
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
@@ -30,7 +39,11 @@ export default function CheckoutForm() {
       newErrors.phone = "Enter a valid 10-digit Indian mobile number";
     if (!customerInfo.address.trim() || customerInfo.address.length < 10)
       newErrors.address = "Please enter a full delivery address";
-    if (!isDeliverable) newErrors.zone = "Your location is outside our delivery zone (5km radius)";
+    if (!isDeliverable)
+      newErrors.zone = "Your location is outside our delivery zone (5km radius)";
+    if (!requestedDeliveryTime || !deliverySlotLabel)
+      newErrors.slot = "Please select a delivery time slot";
+
     return newErrors;
   };
 
@@ -50,6 +63,8 @@ export default function CheckoutForm() {
           customer: customerInfo,
           subtotal: getSubtotal(),
           deliveryFee: getDeliveryFee(),
+          requestedDeliveryTime,
+          deliverySlotLabel,
         });
 
         if (res?.success && res?.whatsappUrl) {
@@ -105,7 +120,11 @@ export default function CheckoutForm() {
             type="tel"
             placeholder="10-digit mobile"
             value={customerInfo.phone}
-            onChange={(e) => setCustomerInfo({ phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+            onChange={(e) =>
+              setCustomerInfo({
+                phone: e.target.value.replace(/\D/g, "").slice(0, 10),
+              })
+            }
             className={`flex-1 border rounded-r-xl px-4 py-3 text-sm outline-none focus:border-brand-accent transition ${
               errors.phone ? "border-red-400" : "border-gray-200"
             }`}
@@ -160,6 +179,16 @@ export default function CheckoutForm() {
           </p>
         )}
       </div>
+
+      {/* Delivery Time Scheduling */}
+      <DeliveryTimePicker error={errors.slot} />
+
+      {errors.submit && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-1.5">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>{errors.submit}</span>
+        </div>
+      )}
 
       {/* Submit */}
       <button

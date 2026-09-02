@@ -111,7 +111,8 @@ YOUR PERSONA & CONVERSATION RULES:
    - 10-digit Indian Phone Number (e.g. 9876543210)
    - Complete Delivery Address in Guwahati
    - Selected items with quantities
-   Confirm their order summary and total with them, call the createOrderRecord tool, and celebrate their order with the WhatsApp finalization link!
+   - Preferred 30-minute Delivery Time Slot (e.g. "Today, 7:30–8:00 PM" or "ASAP (~45 mins)"). Orders require at least 45 minutes fresh preparation lead time between 11:00 AM and 10:00 PM.
+   Confirm their order summary, delivery slot, and total with them, call the createOrderRecord tool, and celebrate their order with the WhatsApp finalization link!
 
 ${brandKnowledge}
 `.trim();
@@ -169,6 +170,10 @@ export async function POST(req: Request) {
             deliveryAddress: z
               .string()
               .describe("Full delivery address in Guwahati"),
+            deliverySlotLabel: z
+              .string()
+              .optional()
+              .describe("Requested delivery slot e.g. Today, 7:30–8:00 PM or ASAP"),
             items: z
               .array(
                 z.object({
@@ -185,6 +190,7 @@ export async function POST(req: Request) {
             customerName,
             customerPhone,
             deliveryAddress,
+            deliverySlotLabel,
             items,
           }) => {
             try {
@@ -196,6 +202,9 @@ export async function POST(req: Request) {
               const total = subtotal + deliveryFee;
 
               const cleanPhone = customerPhone.replace(/\D/g, "");
+
+              const slotLabel = deliverySlotLabel || "ASAP (Today, ~45-60 mins)";
+              const reqTime = new Date(Date.now() + 45 * 60 * 1000);
 
               // 1. Find or create user in DB
               let userId: string;
@@ -236,6 +245,8 @@ export async function POST(req: Request) {
                   totalAmount: total,
                   deliveryFee,
                   deliveryAddress,
+                  requestedDeliveryTime: reqTime,
+                  deliverySlotLabel: slotLabel,
                   status: "pending",
                   whatsappSent: "pending_wa_click",
                 })
@@ -252,7 +263,9 @@ export async function POST(req: Request) {
                 cartItems,
                 customer,
                 subtotal,
-                deliveryFee
+                deliveryFee,
+                slotLabel,
+                newOrder?.id
               );
 
               // 4. Optionally record session memory if provided

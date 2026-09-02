@@ -28,6 +28,32 @@ export const siteConfig = {
 } as const;
 
 // ----------------------------------------------------------
+// Kitchen Operations & Scheduling Constants
+// ----------------------------------------------------------
+export const MIN_PREP_LEAD_MINUTES = 45;
+export const KITCHEN_OPEN_HOUR = 11; // 11:00 AM
+export const KITCHEN_CLOSE_HOUR = 22; // 10:00 PM
+export const SLOT_INTERVAL_MINUTES = 30;
+export const MAX_ORDERS_PER_SLOT = 5;
+export const ADMIN_PIN = process.env.ADMIN_PIN || "1234";
+
+export const HERO_IMAGES = [
+  "/Bibimbap.png",
+  "/Bibmbap_Binto.jpg",
+  "/bento.jpg",
+] as const;
+
+export const deliveryTimeConfig = {
+  label: "Delivery Time Slot",
+  asapLabel: "ASAP (As Soon As Possible)",
+  selectPrompt: "Select a delivery time slot",
+  leadTimeNotice: "Orders require a 45-minute fresh preparation lead time.",
+  kitchenClosedNotice: "Kitchen is closed for today. Showing available slots for Tomorrow.",
+  slotFullNotice: "This time slot has reached maximum prep capacity.",
+  errorRequired: "Please select a delivery time slot to place your order.",
+} as const;
+
+// ----------------------------------------------------------
 // Our Story
 // ----------------------------------------------------------
 export const ourStory = {

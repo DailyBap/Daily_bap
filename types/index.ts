@@ -35,6 +35,8 @@ export interface Order {
   totalAmount: number;
   deliveryFee: number;
   deliveryAddress: string;
+  requestedDeliveryTime?: string | Date | null;
+  deliverySlotLabel?: string | null;
   status: OrderStatus;
   createdAt: Date;
 }

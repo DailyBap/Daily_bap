@@ -201,6 +201,8 @@ export async function POST(req: Request) {
                     totalAmount: fallbackTotal,
                     deliveryFee,
                     deliveryAddress: address,
+                    requestedDeliveryTime: new Date(Date.now() + 45 * 60 * 1000),
+                    deliverySlotLabel: "ASAP (Meta DM Order)",
                     status: "pending",
                     whatsappSent: "meta_dm",
                   });
