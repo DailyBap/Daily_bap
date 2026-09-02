@@ -2,6 +2,8 @@
 
 import {
   MIN_PREP_LEAD_MINUTES,
+  DELIVERY_TRANSIT_MINUTES,
+  TOTAL_LEAD_MINUTES,
   KITCHEN_OPEN_HOUR,
   KITCHEN_CLOSE_HOUR,
   SLOT_INTERVAL_MINUTES,
@@ -36,23 +38,24 @@ function roundUpToInterval(date: Date, intervalMinutes: number): Date {
 }
 
 /**
- * Checks if ordering for "Today" is closed (past closing time or past last prep slot).
+ * Checks if ordering for "Today" is closed (past closing time or past last lead-time slot).
  */
 export function isTodayOrderingClosed(referenceDate: Date = new Date()): boolean {
   const now = new Date(referenceDate);
   const todayClose = new Date(now);
   todayClose.setHours(KITCHEN_CLOSE_HOUR, 0, 0, 0);
 
-  const minPrepTime = new Date(
-    now.getTime() + MIN_PREP_LEAD_MINUTES * 60 * 1000
+  const minLeadTime = new Date(
+    now.getTime() + TOTAL_LEAD_MINUTES * 60 * 1000
   );
-  const roundedStart = roundUpToInterval(minPrepTime, SLOT_INTERVAL_MINUTES);
+  const roundedStart = roundUpToInterval(minLeadTime, SLOT_INTERVAL_MINUTES);
 
   return roundedStart >= todayClose || now >= todayClose;
 }
 
 /**
  * Generates available 30-minute delivery time slots for an explicit day ("today" or "tomorrow").
+ * For Today: Enforces TOTAL_LEAD_MINUTES (45 min prep + 30 min delivery = 75 mins).
  */
 export function generateAvailableSlotsForDay(
   day: "today" | "tomorrow",
@@ -66,8 +69,8 @@ export function generateAvailableSlotsForDay(
       return { slots: [], isTodayClosed: true };
     }
 
-    const minPrepTime = new Date(
-      now.getTime() + MIN_PREP_LEAD_MINUTES * 60 * 1000
+    const minLeadTime = new Date(
+      now.getTime() + TOTAL_LEAD_MINUTES * 60 * 1000
     );
     const todayOpen = new Date(now);
     todayOpen.setHours(KITCHEN_OPEN_HOUR, 0, 0, 0);
@@ -75,14 +78,14 @@ export function generateAvailableSlotsForDay(
     const todayClose = new Date(now);
     todayClose.setHours(KITCHEN_CLOSE_HOUR, 0, 0, 0);
 
-    let startTime = minPrepTime > todayOpen ? minPrepTime : todayOpen;
+    let startTime = minLeadTime > todayOpen ? minLeadTime : todayOpen;
     startTime = roundUpToInterval(startTime, SLOT_INTERVAL_MINUTES);
 
     const slots: DeliverySlot[] = [];
 
-    // Add ASAP option
+    // Add ASAP option: resolves to now + TOTAL_LEAD_MINUTES (45m prep + 30m delivery)
     const asapTimestamp = new Date(
-      now.getTime() + MIN_PREP_LEAD_MINUTES * 60 * 1000
+      now.getTime() + TOTAL_LEAD_MINUTES * 60 * 1000
     );
     const asapEnd = new Date(asapTimestamp.getTime() + 30 * 60 * 1000);
 
@@ -180,16 +183,16 @@ export function validateDeliveryTimeSlot(
 
   const isToday = reqDate.toDateString() === now.toDateString();
 
-  // 2. If ordering for Today, verify lead time buffer
+  // 2. If ordering for Today, verify lead time buffer (45m prep + 30m delivery = 75m total)
   if (isToday) {
     const minAllowedTime = new Date(
-      now.getTime() + (MIN_PREP_LEAD_MINUTES - 5) * 60 * 1000 // 5-min grace period for server latency
+      now.getTime() + (TOTAL_LEAD_MINUTES - 5) * 60 * 1000 // 5-min grace period for server latency
     );
 
     if (reqDate < minAllowedTime) {
       return {
         valid: false,
-        reason: `Requested delivery time is earlier than the required ${MIN_PREP_LEAD_MINUTES}-minute preparation lead time.`,
+        reason: `Requested delivery time is earlier than the required ${TOTAL_LEAD_MINUTES}-minute total lead time (45m prep + 30m delivery).`,
       };
     }
   }

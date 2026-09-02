@@ -111,7 +111,7 @@ YOUR PERSONA & CONVERSATION RULES:
    - 10-digit Indian Phone Number (e.g. 9876543210)
    - Complete Delivery Address in Guwahati
    - Selected items with quantities
-   - Preferred 30-minute Delivery Time Slot (e.g. "Today, 7:30–8:00 PM" or "ASAP (~45 mins)"). Orders require at least 45 minutes fresh preparation lead time between 11:00 AM and 10:00 PM.
+   - Preferred 30-minute Delivery Time Slot (e.g. "Today, 7:30–8:00 PM" or "ASAP (~75 mins)"). Orders placed today require at least 75 minutes total lead time (45 mins fresh prep + 30 mins delivery) between 11:00 AM and 10:00 PM.
    Confirm their order summary, delivery slot, and total with them, call the createOrderRecord tool, and celebrate their order with the WhatsApp finalization link!
 
 ${brandKnowledge}
@@ -203,8 +203,8 @@ export async function POST(req: Request) {
 
               const cleanPhone = customerPhone.replace(/\D/g, "");
 
-              const slotLabel = deliverySlotLabel || "ASAP (Today, ~45-60 mins)";
-              const reqTime = new Date(Date.now() + 45 * 60 * 1000);
+              const slotLabel = deliverySlotLabel || "ASAP (Today, ~75 mins)";
+              const reqTime = new Date(Date.now() + 75 * 60 * 1000);
 
               // 1. Find or create user in DB
               let userId: string;

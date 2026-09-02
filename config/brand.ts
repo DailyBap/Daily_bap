@@ -31,6 +31,8 @@ export const siteConfig = {
 // Kitchen Operations & Scheduling Constants
 // ----------------------------------------------------------
 export const MIN_PREP_LEAD_MINUTES = 45;
+export const DELIVERY_TRANSIT_MINUTES = 30;
+export const TOTAL_LEAD_MINUTES = MIN_PREP_LEAD_MINUTES + DELIVERY_TRANSIT_MINUTES; // 75 mins total for today
 export const KITCHEN_OPEN_HOUR = 11; // 11:00 AM
 export const KITCHEN_CLOSE_HOUR = 22; // 10:00 PM
 export const SLOT_INTERVAL_MINUTES = 30;
@@ -50,7 +52,8 @@ export const deliveryTimeConfig = {
   todayLabel: "Today",
   tomorrowLabel: "Tomorrow",
   selectPrompt: "Select a delivery time slot",
-  leadTimeNotice: "Orders require a 45-minute fresh preparation lead time.",
+  leadTimeNotice: "Orders require 45-min prep + 30-min delivery time (75 mins total).",
+  leadTimeShort: "45m prep + 30m delivery",
   kitchenClosedNotice: "Kitchen is closed for today. Showing available slots for Tomorrow.",
   todayClosedNotice: "Today's ordering window has closed. Please order for Tomorrow.",
   slotFullNotice: "This time slot has reached maximum prep capacity.",

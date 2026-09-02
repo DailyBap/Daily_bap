@@ -83,7 +83,7 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
           <span>{deliveryTimeConfig.label}</span>
         </label>
         <span className="text-[10px] text-gray-500 font-medium">
-          45-min prep lead time
+          {deliveryTimeConfig.leadTimeShort}
         </span>
       </div>
 
