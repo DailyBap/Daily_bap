@@ -41,7 +41,7 @@ export interface Order {
   createdAt: Date;
 }
 
-export type OrderStatus = "pending" | "confirmed" | "preparing" | "out_for_delivery" | "delivered" | "cancelled";
+export type OrderStatus = "draft" | "pending" | "confirmed" | "preparing" | "out_for_delivery" | "delivered" | "cancelled";
 
 export interface FoodPrinciple {
   id: number;

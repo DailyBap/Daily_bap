@@ -4,6 +4,7 @@ require("dotenv").config({ path: ".env.local" });
 const sql = neon(process.env.DATABASE_URL);
 
 async function run() {
+  await sql`ALTER TYPE order_status ADD VALUE IF NOT EXISTS 'draft';`;
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS requested_delivery_time TIMESTAMP;`;
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_slot_label TEXT;`;
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_number TEXT;`;
@@ -16,7 +17,7 @@ async function run() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `;
-  console.log("✅ DB migration successful: added order_number and offers table.");
+  console.log("✅ DB migration successful: added draft status, order_number and offers table.");
 }
 
 run().catch((err) => {

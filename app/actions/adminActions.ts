@@ -8,6 +8,7 @@ import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export type OrderStatus =
+  | "draft"
   | "pending"
   | "confirmed"
   | "preparing"

@@ -15,6 +15,7 @@ import {
 // Enums
 // ----------------------------------------------------------
 export const orderStatusEnum = pgEnum("order_status", [
+  "draft",
   "pending",
   "confirmed",
   "preparing",
@@ -50,7 +51,7 @@ export const orders = pgTable("orders", {
   deliveryAddress: text("delivery_address").notNull(),
   requestedDeliveryTime: timestamp("requested_delivery_time"),
   deliverySlotLabel: text("delivery_slot_label"),
-  status: orderStatusEnum("status").notNull().default("pending"),
+  status: orderStatusEnum("status").notNull().default("draft"),
   whatsappSent: text("whatsapp_sent").default("no"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -3,10 +3,9 @@
 import { useState, useTransition } from "react";
 import {
   updateOrderStatus,
-  createNewOffer,
-  toggleOffer,
   OrderStatus,
 } from "@/app/actions/adminActions";
+import { createOffer, toggleOffer } from "@/app/actions/offerActions";
 import {
   ShoppingBag,
   Tag,
@@ -56,6 +55,7 @@ interface AdminDashboardClientProps {
 }
 
 const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
+  { value: "draft", label: "Draft (Awaiting WhatsApp)" },
   { value: "pending", label: "Pending" },
   { value: "confirmed", label: "Confirmed" },
   { value: "preparing", label: "Preparing" },
@@ -102,7 +102,7 @@ export default function AdminDashboardClient({
     }
 
     startTransition(async () => {
-      const res = await createNewOffer(newTitle, newCode);
+      const res = await createOffer({ title: newTitle, code: newCode });
       if (res.success) {
         setOfferSuccess("Offer created successfully!");
         setOffersList((prev) => [
@@ -190,6 +190,7 @@ export default function AdminDashboardClient({
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {ordersList.map((order) => {
+                    const isDraft = order.status === "draft";
                     const displayOrderNo =
                       order.orderNumber || `BAP-${order.id.slice(0, 5).toUpperCase()}`;
                     const rawPhone = order.userPhone?.replace(/\D/g, "") || "";
@@ -208,12 +209,26 @@ export default function AdminDashboardClient({
                     const deliveryLink = `https://wa.me/91${cleanPhone}?text=${deliveryMsg}`;
 
                     return (
-                      <tr key={order.id} className="hover:bg-gray-50/50 transition">
+                      <tr
+                        key={order.id}
+                        className={`transition ${
+                          isDraft
+                            ? "bg-amber-50/70 border-l-4 border-l-amber-500 hover:bg-amber-100/60"
+                            : "hover:bg-gray-50/50"
+                        }`}
+                      >
                         {/* Order Number */}
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="font-mono font-bold text-sm text-brand-primary bg-brand-primary/10 px-2.5 py-1 rounded-lg">
-                            {displayOrderNo}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="font-mono font-bold text-sm text-brand-primary bg-brand-primary/10 px-2.5 py-1 rounded-lg w-fit">
+                              {displayOrderNo}
+                            </span>
+                            {isDraft && (
+                              <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md w-fit">
+                                Draft (Awaiting WhatsApp)
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Customer */}

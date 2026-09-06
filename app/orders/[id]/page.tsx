@@ -15,8 +15,12 @@ import {
   ArrowLeft,
   Phone,
   Star,
+  AlertTriangle,
+  MessageCircle,
 } from "lucide-react";
 import { siteConfig } from "@/config/brand";
+import { generateWhatsAppLink } from "@/lib/whatsapp";
+import type { CartItem } from "@/types";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -77,8 +81,33 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
     summary?: string;
   }>) || [];
 
+  const formattedItems: CartItem[] = items.map((item) => ({
+    id: item.id || "item",
+    name: item.name || item.summary || "Bap Bowl",
+    price: item.price || 0,
+    quantity: item.quantity || 1,
+    modelRef: null,
+  }));
+
+  const subtotal = order.totalAmount - order.deliveryFee;
+  const customer = {
+    name: user.name,
+    phone: user.phone,
+    address: order.deliveryAddress,
+  };
+
+  const waLink = generateWhatsAppLink(
+    formattedItems,
+    customer,
+    subtotal,
+    order.deliveryFee,
+    order.deliverySlotLabel,
+    order.id,
+    order.orderNumber
+  );
+
   const currentStatusIndex =
-    order.status === "cancelled"
+    order.status === "cancelled" || order.status === "draft"
       ? -1
       : STATUS_STEPS.findIndex((s) => s.key === order.status);
 
@@ -109,6 +138,29 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
               {siteConfig.name} — 100% Pre-Order Korean Kitchen
             </p>
           </div>
+
+          {/* Draft Order Banner */}
+          {order.status === "draft" && (
+            <div className="p-6 bg-amber-50 border-b border-amber-200 text-center space-y-4">
+              <div className="flex flex-col items-center justify-center gap-2">
+                <AlertTriangle className="w-8 h-8 text-amber-600 animate-bounce" />
+                <h2 className="text-base sm:text-lg font-bold text-amber-900 leading-snug max-w-xl mx-auto">
+                  ⚠️ Action Required: Your order is saved, but not yet confirmed! Please send the pre-filled WhatsApp message to our kitchen to secure your delivery slot.
+                </h2>
+              </div>
+              <div>
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3 px-6 rounded-2xl text-sm transition-all hover:scale-105 shadow-md shadow-emerald-600/20"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  <span>Send WhatsApp Now</span>
+                </a>
+              </div>
+            </div>
+          )}
 
           {/* Cancelled Banner */}
           {order.status === "cancelled" ? (

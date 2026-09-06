@@ -156,7 +156,7 @@ export async function placeOrder(
         deliveryAddress: customer.address,
         requestedDeliveryTime: timeDate,
         deliverySlotLabel,
-        status: "pending",
+        status: "draft",
         whatsappSent: "yes",
       })
       .returning({ id: orders.id });
