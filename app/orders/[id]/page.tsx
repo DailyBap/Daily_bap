@@ -14,8 +14,27 @@ import {
   XCircle,
   ArrowLeft,
   Phone,
+  Star,
 } from "lucide-react";
 import { siteConfig } from "@/config/brand";
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
 
 export const revalidate = 0; // Dynamic server page
 
@@ -248,6 +267,40 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Feedback & Social Media CTA Card */}
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-200/80 p-6 text-center space-y-3">
+          <h3 className="font-display font-bold text-xl text-gray-900">
+            Enjoying your Daily Bap?
+          </h3>
+          <p className="text-xs sm:text-sm text-gray-600 max-w-md mx-auto leading-relaxed">
+            We pour our heart into every bowl. Snap a pic to get featured, or leave us a quick review! Your feedback helps our kitchen grow.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3 mt-4 justify-center">
+            {/* Button 1: Instagram */}
+            <a
+              href="https://instagram.com/daily.bap.guwahati"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 bg-[#445916] hover:bg-[#354611] text-white font-bold py-3 px-5 rounded-2xl text-xs sm:text-sm transition-all hover:scale-[1.02] shadow-md shadow-[#445916]/20"
+            >
+              <InstagramIcon className="w-4 h-4" />
+              <span>Tag @daily.bap.guwahati</span>
+            </a>
+
+            {/* TODO: Replace with Google Business Review Link */}
+            <a
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-bold py-3 px-5 rounded-2xl text-xs sm:text-sm transition-all hover:scale-[1.02]"
+            >
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <span>Leave a Google Review</span>
+            </a>
           </div>
         </div>
       </div>
