@@ -3,6 +3,8 @@
 import { getActiveOffer } from "@/app/actions/offerActions";
 import { Tag } from "lucide-react";
 
+export const revalidate = 0; // Dynamic server component: checks DB live on every request
+
 export default async function OfferBanner() {
   const activeOffer = await getActiveOffer();
 
