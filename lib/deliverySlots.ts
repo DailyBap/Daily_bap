@@ -1,247 +1,148 @@
-// lib/deliverySlots.ts — Delivery Slot Generation & Validation Logic
+// lib/deliverySlots.ts — Static 15-Minute Slot Generation & Validation Logic
 
-import {
-  MIN_PREP_LEAD_MINUTES,
-  DELIVERY_TRANSIT_MINUTES,
-  TOTAL_LEAD_MINUTES,
-  KITCHEN_OPEN_HOUR,
-  KITCHEN_CLOSE_HOUR,
-  SLOT_INTERVAL_MINUTES,
-  MAX_PREORDER_DAYS,
-} from "@/config/brand";
+export interface StaticSlot {
+  timeString: string; // e.g. "12:00 PM"
+  hour: number;       // 24h format (12)
+  minute: number;     // (0)
+}
 
-export interface DeliverySlot {
-  id: string; // ISO timestamp string or "asap"
-  label: string; // Human-readable e.g. "Today, 7:30–8:00 PM"
-  timestamp: Date;
-  isAsap?: boolean;
-  isTomorrow?: boolean;
+export interface DeliverySlotOption {
+  id: string;         // e.g. "Today, 12:00 PM"
+  label: string;      // e.g. "Today, 12:00 PM"
+  day: "today" | "tomorrow";
+  timeString: string;
 }
 
 /**
- * Formats a Date object into a 12-hour time string (e.g. "7:30 PM")
+ * Generates a fixed array of possible delivery times in 15-minute increments
+ * starting from 12:00 PM (12:00) up to 11:15 PM (23:15).
  */
-function formatTime12h(date: Date): string {
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+export function generateStatic15MinSlots(): StaticSlot[] {
+  const slots: StaticSlot[] = [];
+  for (let h = 12; h <= 23; h++) {
+    const startM = 0;
+    const endM = h === 23 ? 15 : 45;
+    for (let m = startM; m <= endM; m += 15) {
+      const displayHour = h > 12 ? h - 12 : h;
+      const ampm = h >= 12 ? "PM" : "AM";
+      const minuteStr = m === 0 ? "00" : m.toString();
+      const timeString = `${displayHour}:${minuteStr} ${ampm}`;
+      slots.push({
+        timeString,
+        hour: h,
+        minute: m,
+      });
+    }
+  }
+  return slots;
 }
 
 /**
- * Rounds a date up to the next interval boundary (e.g., 30 minutes)
- */
-function roundUpToInterval(date: Date, intervalMinutes: number): Date {
-  const ms = 1000 * 60 * intervalMinutes;
-  return new Date(Math.ceil(date.getTime() / ms) * ms);
-}
-
-/**
- * Checks if ordering for "Today" is closed (past closing time or past last lead-time slot).
+ * Checks if ordering for "Today" is closed (past 10:00 PM / 22:00 local time).
  */
 export function isTodayOrderingClosed(referenceDate: Date = new Date()): boolean {
-  const now = new Date(referenceDate);
-  const todayClose = new Date(now);
-  todayClose.setHours(KITCHEN_CLOSE_HOUR, 0, 0, 0);
-
-  const minLeadTime = new Date(
-    now.getTime() + TOTAL_LEAD_MINUTES * 60 * 1000
-  );
-  const roundedStart = roundUpToInterval(minLeadTime, SLOT_INTERVAL_MINUTES);
-
-  return roundedStart >= todayClose || now >= todayClose;
+  return referenceDate.getHours() >= 22;
 }
 
 /**
- * Generates available 30-minute delivery time slots for an explicit day ("today" or "tomorrow").
- * For Today: Enforces TOTAL_LEAD_MINUTES (45 min prep + 30 min delivery = 75 mins).
+ * Generates available delivery slot options for an explicit day ("today" or "tomorrow").
+ * 
+ * Today:
+ * - If past 10:00 PM, Today is closed.
+ * - Calculate Earliest Delivery = Current Time + 75 minutes, rounded up to nearest 15-minute interval.
+ * - If Earliest Delivery is before 12:00 PM (e.g. 9:00 AM), default available slots to start at 12:00 PM.
+ * - Filter fixed array to only show slots >= Earliest Delivery.
+ * 
+ * Tomorrow:
+ * - Display entire fixed array from 12:00 PM to 11:15 PM.
  */
-export function generateAvailableSlotsForDay(
+export function getAvailableSlots(
   day: "today" | "tomorrow",
-  referenceDate: Date = new Date()
-): { slots: DeliverySlot[]; isTodayClosed: boolean } {
-  const now = new Date(referenceDate);
-  const todayClosed = isTodayOrderingClosed(now);
+  now: Date = new Date()
+): { slots: DeliverySlotOption[]; isTodayClosed: boolean } {
+  const isTodayClosed = isTodayOrderingClosed(now);
+  const staticSlots = generateStatic15MinSlots();
 
   if (day === "today") {
-    if (todayClosed) {
+    if (isTodayClosed) {
       return { slots: [], isTodayClosed: true };
     }
 
-    const minLeadTime = new Date(
-      now.getTime() + TOTAL_LEAD_MINUTES * 60 * 1000
-    );
-    const todayOpen = new Date(now);
-    todayOpen.setHours(KITCHEN_OPEN_HOUR, 0, 0, 0);
-
-    const todayClose = new Date(now);
-    todayClose.setHours(KITCHEN_CLOSE_HOUR, 0, 0, 0);
-
-    let startTime = minLeadTime > todayOpen ? minLeadTime : todayOpen;
-    startTime = roundUpToInterval(startTime, SLOT_INTERVAL_MINUTES);
-
-    const slots: DeliverySlot[] = [];
-
-    // Add ASAP option: resolves to now + TOTAL_LEAD_MINUTES (45m prep + 30m delivery)
-    const asapTimestamp = new Date(
-      now.getTime() + TOTAL_LEAD_MINUTES * 60 * 1000
-    );
-    const asapEnd = new Date(asapTimestamp.getTime() + 30 * 60 * 1000);
-
-    if (asapTimestamp < todayClose) {
-      slots.push({
-        id: "asap",
-        label: `ASAP (Today, ~${formatTime12h(asapTimestamp)} - ${formatTime12h(asapEnd)})`,
-        timestamp: asapTimestamp,
-        isAsap: true,
-        isTomorrow: false,
-      });
+    // Earliest Delivery = Current Time + 75 mins, rounded up to 15-min boundary
+    const earliest = new Date(now.getTime() + 75 * 60 * 1000);
+    const mins = earliest.getMinutes();
+    const rem = mins % 15;
+    if (rem > 0) {
+      earliest.setMinutes(mins + (15 - rem), 0, 0);
+    } else {
+      earliest.setSeconds(0, 0);
     }
 
-    let currentSlotStart = new Date(startTime);
-    while (currentSlotStart < todayClose) {
-      const currentSlotEnd = new Date(
-        currentSlotStart.getTime() + SLOT_INTERVAL_MINUTES * 60 * 1000
-      );
-      if (currentSlotEnd > todayClose) break;
+    const eHour = earliest.getHours();
+    const eMin = earliest.getMinutes();
 
-      const label = `Today, ${formatTime12h(currentSlotStart)} – ${formatTime12h(currentSlotEnd)}`;
+    // Filter static slots >= earliest delivery time (default to start at 12:00 PM if earliest is before 12:00 PM)
+    const filteredStatic = staticSlots.filter((slot) => {
+      if (slot.hour > eHour) return true;
+      if (slot.hour === eHour && slot.minute >= eMin) return true;
+      return false;
+    });
 
-      slots.push({
-        id: currentSlotStart.toISOString(),
-        label,
-        timestamp: new Date(currentSlotStart),
-        isTomorrow: false,
-      });
+    const options: DeliverySlotOption[] = filteredStatic.map((s) => ({
+      id: `Today, ${s.timeString}`,
+      label: `Today, ${s.timeString}`,
+      day: "today",
+      timeString: s.timeString,
+    }));
 
-      currentSlotStart = currentSlotEnd;
-    }
-
-    return { slots, isTodayClosed: false };
+    return { slots: options, isTodayClosed: false };
   } else {
-    // Tomorrow slots (spans full operating hours 11:00 AM - 10:00 PM)
-    const tomorrowDate = new Date(now);
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    // Tomorrow: entire fixed array from 12:00 PM to 11:15 PM
+    const options: DeliverySlotOption[] = staticSlots.map((s) => ({
+      id: `Tomorrow, ${s.timeString}`,
+      label: `Tomorrow, ${s.timeString}`,
+      day: "tomorrow",
+      timeString: s.timeString,
+    }));
 
-    const tomorrowOpen = new Date(tomorrowDate);
-    tomorrowOpen.setHours(KITCHEN_OPEN_HOUR, 0, 0, 0);
-
-    const tomorrowClose = new Date(tomorrowDate);
-    tomorrowClose.setHours(KITCHEN_CLOSE_HOUR, 0, 0, 0);
-
-    const slots: DeliverySlot[] = [];
-    let currentSlotStart = new Date(tomorrowOpen);
-
-    while (currentSlotStart < tomorrowClose) {
-      const currentSlotEnd = new Date(
-        currentSlotStart.getTime() + SLOT_INTERVAL_MINUTES * 60 * 1000
-      );
-      if (currentSlotEnd > tomorrowClose) break;
-
-      const label = `Tomorrow, ${formatTime12h(currentSlotStart)} – ${formatTime12h(currentSlotEnd)}`;
-
-      slots.push({
-        id: currentSlotStart.toISOString(),
-        label,
-        timestamp: new Date(currentSlotStart),
-        isTomorrow: true,
-      });
-
-      currentSlotStart = currentSlotEnd;
-    }
-
-    return { slots, isTodayClosed: todayClosed };
+    return { slots: options, isTodayClosed };
   }
 }
 
 /**
- * Converts a Date object or 12-hour time string into a 24-hour hour integer (0-23).
- * Extracts the hour and AM/PM modifier from the selected time string:
- * - If PM and hour !== 12, add 12 to hour.
- * - If AM and hour === 12, set hour to 0.
- */
-export function parseHour12To24(timeInput: Date | string): number {
-  if (timeInput instanceof Date) {
-    return timeInput.getHours();
-  }
-
-  if (typeof timeInput === "string") {
-    const match = timeInput.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)/i);
-    if (match) {
-      let hour = parseInt(match[1], 10);
-      const modifier = match[3].toUpperCase();
-
-      if (modifier === "PM" && hour !== 12) {
-        hour += 12;
-      } else if (modifier === "AM" && hour === 12) {
-        hour = 0;
-      }
-      return hour;
-    }
-
-    const d = new Date(timeInput);
-    if (!isNaN(d.getTime())) {
-      return d.getHours();
-    }
-  }
-
-  return NaN;
-}
-
-/**
- * Server-side validation of requested delivery time against date range, operating hours, and lead time
+ * Validation logic strictly checking clean string formats ("Today, 12:00 PM" or "Tomorrow, 1:15 PM").
  */
 export function validateDeliveryTimeSlot(
-  requestedTime: Date | string,
-  now: Date = new Date(),
-  isAsap: boolean = false
+  requestedTime: string | Date | null | undefined
 ): { valid: boolean; reason?: string } {
-  const reqDate = new Date(requestedTime);
-  if (isNaN(reqDate.getTime())) {
-    return { valid: false, reason: "Invalid delivery time format." };
+  if (!requestedTime) {
+    return { valid: false, reason: "Please select a delivery time slot." };
   }
 
-  // 1. Verify date is within MAX_PREORDER_DAYS (Today or Tomorrow)
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
+  const str = typeof requestedTime === "string" ? requestedTime : requestedTime.toString();
 
-  const maxAllowedDate = new Date(startOfToday);
-  maxAllowedDate.setDate(maxAllowedDate.getDate() + MAX_PREORDER_DAYS);
-
-  if (reqDate < startOfToday || reqDate >= maxAllowedDate) {
-    return {
-      valid: false,
-      reason: `Orders can only be scheduled within ${MAX_PREORDER_DAYS} days (Today or Tomorrow).`,
-    };
+  if (
+    str.startsWith("Today,") ||
+    str.startsWith("Tomorrow,") ||
+    str.startsWith("ASAP")
+  ) {
+    return { valid: true };
   }
 
-  const isToday = reqDate.toDateString() === now.toDateString();
-
-  // 2. If ordering for Today, verify lead time buffer (45m prep + 30m delivery = 75m total)
-  if (isToday) {
-    // For ASAP orders, give a generous 30-minute grace period because the user selected ASAP at page load time and took a few minutes to complete checkout.
-    const gracePeriodMinutes = isAsap ? 30 : 5;
-    const minAllowedTime = new Date(
-      now.getTime() + (TOTAL_LEAD_MINUTES - gracePeriodMinutes) * 60 * 1000
-    );
-
-    if (reqDate < minAllowedTime) {
-      return {
-        valid: false,
-        reason: `Requested delivery time is earlier than the required ${TOTAL_LEAD_MINUTES}-minute lead time (45m prep + 30m delivery). Please re-select a delivery time slot.`,
-      };
-    }
+  const d = new Date(requestedTime);
+  if (!isNaN(d.getTime())) {
+    return { valid: true };
   }
 
-  // 3. Verify operating hours (11:00 AM to 10:00 PM)
-  const hour = parseHour12To24(requestedTime);
-  if (isNaN(hour) || hour < KITCHEN_OPEN_HOUR || hour >= KITCHEN_CLOSE_HOUR) {
-    return {
-      valid: false,
-      reason: `Kitchen operating hours are ${KITCHEN_OPEN_HOUR}:00 AM to 10:00 PM. Requested slot is closed.`,
-    };
-  }
+  return { valid: false, reason: "Please select a valid delivery time slot." };
+}
 
-  return { valid: true };
+// Retain legacy exports for backwards compatibility
+export type DeliverySlot = DeliverySlotOption;
+
+export function generateAvailableSlotsForDay(
+  day: "today" | "tomorrow",
+  referenceDate: Date = new Date()
+) {
+  return getAvailableSlots(day, referenceDate);
 }

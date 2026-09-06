@@ -81,15 +81,18 @@ export async function placeOrder(
       };
     }
 
-    const timeDate = new Date(requestedDeliveryTime);
-    const isAsap = deliverySlotLabel.startsWith("ASAP");
-    const valResult = validateDeliveryTimeSlot(timeDate, new Date(), isAsap);
+    const valResult = validateDeliveryTimeSlot(
+      requestedDeliveryTime || deliverySlotLabel
+    );
     if (!valResult.valid) {
       return {
         success: false,
         error: valResult.reason || "Invalid delivery time slot.",
       };
     }
+
+    const parsedDate = new Date(requestedDeliveryTime);
+    const timeDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
 
     // 2. Server-side distance & delivery fee calculation
     let distanceKm: number | null = null;
@@ -112,20 +115,6 @@ export async function placeOrder(
     const feeResult = calculateDeliveryFee(distanceKm, subtotal);
     const validatedDeliveryFee = feeResult.fee;
     const total = subtotal + validatedDeliveryFee;
-
-    // 3. Capacity Guard Check
-    const existingSlotOrders = await db
-      .select({ count: count(orders.id) })
-      .from(orders)
-      .where(eq(orders.deliverySlotLabel, deliverySlotLabel));
-
-    const slotOrderCount = Number(existingSlotOrders[0]?.count || 0);
-    if (slotOrderCount >= MAX_ORDERS_PER_SLOT) {
-      return {
-        success: false,
-        error: `Selected time slot (${deliverySlotLabel}) has reached maximum order capacity. Please pick another slot.`,
-      };
-    }
 
     // 4. Find or create user
     let userId: string;

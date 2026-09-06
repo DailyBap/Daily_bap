@@ -45,11 +45,8 @@ export default function CheckoutForm() {
     if (!requestedDeliveryTime || !deliverySlotLabel) {
       newErrors.slot = "Please select a delivery time slot";
     } else {
-      const isAsap = deliverySlotLabel.startsWith("ASAP");
       const valResult = validateDeliveryTimeSlot(
-        requestedDeliveryTime,
-        new Date(),
-        isAsap
+        requestedDeliveryTime || deliverySlotLabel
       );
       if (!valResult.valid) {
         newErrors.slot = valResult.reason || "Invalid delivery time slot";

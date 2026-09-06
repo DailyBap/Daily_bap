@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Calendar, AlertCircle } from "lucide-react";
+import { Clock, AlertCircle } from "lucide-react";
 import {
-  generateAvailableSlotsForDay,
+  getAvailableSlots,
   isTodayOrderingClosed,
-  DeliverySlot,
+  DeliverySlotOption,
 } from "@/lib/deliverySlots";
 import { useCartStore } from "@/store/useCartStore";
-import { deliveryTimeConfig, MAX_ORDERS_PER_SLOT } from "@/config/brand";
-import { getSlotCapacities } from "@/app/actions/orderActions";
+import { deliveryTimeConfig } from "@/config/brand";
 
 interface DeliveryTimePickerProps {
   error?: string | null;
@@ -20,34 +19,27 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
     useCartStore();
 
   const [selectedDay, setSelectedDay] = useState<"today" | "tomorrow">("today");
-  const [availableSlots, setAvailableSlots] = useState<DeliverySlot[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<DeliverySlotOption[]>([]);
   const [isTodayClosed, setIsTodayClosed] = useState(false);
-  const [slotCapacities, setSlotCapacities] = useState<Record<string, number>>(
-    {}
-  );
-  const [isLoading, setIsLoading] = useState(true);
 
   // Initialize day selection and slot generation
   useEffect(() => {
     const todayClosed = isTodayOrderingClosed();
     setIsTodayClosed(todayClosed);
 
-    const initialDay = todayClosed ? "tomorrow" : "today";
-    setSelectedDay(initialDay);
+    const activeDay = todayClosed ? "tomorrow" : "today";
+    setSelectedDay(activeDay);
 
-    const { slots } = generateAvailableSlotsForDay(initialDay);
+    const { slots } = getAvailableSlots(activeDay);
     setAvailableSlots(slots);
 
-    // Auto select first slot if nothing selected
-    if (!requestedDeliveryTime && slots.length > 0) {
-      setDeliverySlot(slots[0].timestamp, slots[0].label);
+    // Auto-select first slot if nothing selected or if previously selected slot is for Today when Today is closed
+    if (
+      (!requestedDeliveryTime || !deliverySlotLabel || (todayClosed && deliverySlotLabel.startsWith("Today"))) &&
+      slots.length > 0
+    ) {
+      setDeliverySlot(slots[0].label, slots[0].label);
     }
-
-    // Fetch capacity counts
-    getSlotCapacities()
-      .then((capacities) => setSlotCapacities(capacities))
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
   }, []);
 
   // Re-generate slots when selectedDay changes
@@ -55,25 +47,30 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
     if (day === "today" && isTodayClosed) return;
     setSelectedDay(day);
 
-    const { slots } = generateAvailableSlotsForDay(day);
+    const { slots } = getAvailableSlots(day);
     setAvailableSlots(slots);
 
     if (slots.length > 0) {
-      setDeliverySlot(slots[0].timestamp, slots[0].label);
+      setDeliverySlot(slots[0].label, slots[0].label);
     } else {
       setDeliverySlot(null, null);
     }
   };
 
   const handleSlotChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedId = e.target.value;
-    const found = availableSlots.find((s) => s.id === selectedId);
+    const selectedVal = e.target.value;
+    const found = availableSlots.find((s) => s.label === selectedVal);
     if (found) {
-      setDeliverySlot(found.timestamp, found.label);
+      setDeliverySlot(found.label, found.label);
     } else {
       setDeliverySlot(null, null);
     }
   };
+
+  const selectedValue =
+    availableSlots.find(
+      (s) => s.label === requestedDeliveryTime || s.label === deliverySlotLabel
+    )?.label || (availableSlots.length > 0 ? availableSlots[0].label : "");
 
   return (
     <div className="space-y-3 bg-gray-50/80 p-4 rounded-2xl border border-gray-200/80">
@@ -101,7 +98,7 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
         >
           <span>{deliveryTimeConfig.todayLabel}</span>
           {isTodayClosed && (
-            <span className="text-[9px] bg-gray-300 text-gray-600 px-1.5 py-0.5 rounded uppercase">
+            <span className="text-[9px] bg-red-200 text-red-700 px-1.5 py-0.5 rounded uppercase font-semibold">
               Closed
             </span>
           )}
@@ -120,28 +117,20 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
         </button>
       </div>
 
-      {/* Notice if Today is closed */}
-      {isTodayClosed && selectedDay === "tomorrow" && (
-        <div className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-800 p-2.5 rounded-xl border border-amber-200">
-          <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-          <span>{deliveryTimeConfig.todayClosedNotice}</span>
+      {/* 10:00 PM Cutoff Alert */}
+      {isTodayClosed && (
+        <div className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-900 p-3 rounded-xl border border-amber-300 font-medium">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>Kitchen is closed for today! Pre-order now for tomorrow's first delivery.</span>
         </div>
       )}
 
       {/* Time Slot Dropdown */}
       <div className="relative">
         <select
-          value={
-            availableSlots.find(
-              (s) =>
-                s.timestamp.toISOString() === requestedDeliveryTime ||
-                (s.id === "asap" &&
-                  requestedDeliveryTime &&
-                  deliverySlotLabel?.startsWith("ASAP"))
-            )?.id || ""
-          }
+          value={selectedValue}
           onChange={handleSlotChange}
-          disabled={isLoading || availableSlots.length === 0}
+          disabled={availableSlots.length === 0}
           className={`w-full bg-white text-gray-800 text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border ${
             error
               ? "border-rose-500 focus:ring-rose-500"
@@ -151,16 +140,11 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
           <option value="" disabled>
             {deliveryTimeConfig.selectPrompt}
           </option>
-          {availableSlots.map((slot) => {
-            const count = slotCapacities[slot.label] || 0;
-            const isFull = count >= MAX_ORDERS_PER_SLOT;
-
-            return (
-              <option key={slot.id} value={slot.id} disabled={isFull}>
-                {slot.label} {isFull ? "(FULL - Max Capacity)" : ""}
-              </option>
-            );
-          })}
+          {availableSlots.map((slot) => (
+            <option key={slot.id} value={slot.label}>
+              {slot.label}
+            </option>
+          ))}
         </select>
       </div>
 
