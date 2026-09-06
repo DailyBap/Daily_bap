@@ -6,7 +6,7 @@ const WHATSAPP_NUMBER =
   process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "919999999999";
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  process.env.NEXT_PUBLIC_APP_URL || "https://daily-bap.vercel.app";
 
 /**
  * Formats the cart into a human-readable WhatsApp message
@@ -43,7 +43,7 @@ export function generateWhatsAppLink(
     : "";
 
   const trackingLine = orderId
-    ? `\n━━━━━━━━━━━━━━━━━━━━━━━\n📍 *TRACK YOUR ORDER:* ${BASE_URL}/orders/${orderId}`
+    ? `\n━━━━━━━━━━━━━━━━━━━━━━━\n📍 *TRACK YOUR ORDER:* https://daily-bap.vercel.app/orders/${orderId}`
     : "";
 
   const message = `

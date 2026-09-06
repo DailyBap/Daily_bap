@@ -3,6 +3,7 @@
 import { useCartStore } from "@/store/useCartStore";
 import { placeOrder } from "@/app/actions/orderActions";
 import { validatePhone } from "@/lib/whatsapp";
+import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
 import { useState, useTransition } from "react";
 import { User, Phone, MapPin, AlertCircle, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -41,8 +42,19 @@ export default function CheckoutForm() {
       newErrors.address = "Please enter a full delivery address";
     if (!isDeliverable)
       newErrors.zone = "Your location is outside our delivery zone (10km radius)";
-    if (!requestedDeliveryTime || !deliverySlotLabel)
+    if (!requestedDeliveryTime || !deliverySlotLabel) {
       newErrors.slot = "Please select a delivery time slot";
+    } else {
+      const isAsap = deliverySlotLabel.startsWith("ASAP");
+      const valResult = validateDeliveryTimeSlot(
+        requestedDeliveryTime,
+        new Date(),
+        isAsap
+      );
+      if (!valResult.valid) {
+        newErrors.slot = valResult.reason || "Invalid delivery time slot";
+      }
+    }
 
     return newErrors;
   };

@@ -156,6 +156,40 @@ export function generateAvailableSlotsForDay(
 }
 
 /**
+ * Converts a Date object or 12-hour time string into a 24-hour hour integer (0-23).
+ * Extracts the hour and AM/PM modifier from the selected time string:
+ * - If PM and hour !== 12, add 12 to hour.
+ * - If AM and hour === 12, set hour to 0.
+ */
+export function parseHour12To24(timeInput: Date | string): number {
+  if (timeInput instanceof Date) {
+    return timeInput.getHours();
+  }
+
+  if (typeof timeInput === "string") {
+    const match = timeInput.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)/i);
+    if (match) {
+      let hour = parseInt(match[1], 10);
+      const modifier = match[3].toUpperCase();
+
+      if (modifier === "PM" && hour !== 12) {
+        hour += 12;
+      } else if (modifier === "AM" && hour === 12) {
+        hour = 0;
+      }
+      return hour;
+    }
+
+    const d = new Date(timeInput);
+    if (!isNaN(d.getTime())) {
+      return d.getHours();
+    }
+  }
+
+  return NaN;
+}
+
+/**
  * Server-side validation of requested delivery time against date range, operating hours, and lead time
  */
 export function validateDeliveryTimeSlot(
@@ -201,11 +235,11 @@ export function validateDeliveryTimeSlot(
   }
 
   // 3. Verify operating hours (11:00 AM to 10:00 PM)
-  const hour = reqDate.getHours();
-  if (hour < KITCHEN_OPEN_HOUR || hour >= KITCHEN_CLOSE_HOUR) {
+  const hour = parseHour12To24(requestedTime);
+  if (isNaN(hour) || hour < KITCHEN_OPEN_HOUR || hour >= KITCHEN_CLOSE_HOUR) {
     return {
       valid: false,
-      reason: `Kitchen operating hours are ${KITCHEN_OPEN_HOUR}:00 AM to ${KITCHEN_CLOSE_HOUR}:00 PM. Requested slot is closed.`,
+      reason: `Kitchen operating hours are ${KITCHEN_OPEN_HOUR}:00 AM to 10:00 PM. Requested slot is closed.`,
     };
   }
 
