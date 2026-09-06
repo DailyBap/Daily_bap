@@ -160,7 +160,8 @@ export function generateAvailableSlotsForDay(
  */
 export function validateDeliveryTimeSlot(
   requestedTime: Date | string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  isAsap: boolean = false
 ): { valid: boolean; reason?: string } {
   const reqDate = new Date(requestedTime);
   if (isNaN(reqDate.getTime())) {
@@ -185,14 +186,16 @@ export function validateDeliveryTimeSlot(
 
   // 2. If ordering for Today, verify lead time buffer (45m prep + 30m delivery = 75m total)
   if (isToday) {
+    // For ASAP orders, give a generous 30-minute grace period because the user selected ASAP at page load time and took a few minutes to complete checkout.
+    const gracePeriodMinutes = isAsap ? 30 : 5;
     const minAllowedTime = new Date(
-      now.getTime() + (TOTAL_LEAD_MINUTES - 5) * 60 * 1000 // 5-min grace period for server latency
+      now.getTime() + (TOTAL_LEAD_MINUTES - gracePeriodMinutes) * 60 * 1000
     );
 
     if (reqDate < minAllowedTime) {
       return {
         valid: false,
-        reason: `Requested delivery time is earlier than the required ${TOTAL_LEAD_MINUTES}-minute total lead time (45m prep + 30m delivery).`,
+        reason: `Requested delivery time is earlier than the required ${TOTAL_LEAD_MINUTES}-minute lead time (45m prep + 30m delivery). Please re-select a delivery time slot.`,
       };
     }
   }

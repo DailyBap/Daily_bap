@@ -69,6 +69,10 @@ export default function CheckoutForm() {
 
         if (res?.success && res?.whatsappUrl) {
           window.location.href = res.whatsappUrl;
+        } else if (res?.error) {
+          setErrors({ submit: res.error });
+        } else {
+          setErrors({ submit: "Failed to place order. Please try again." });
         }
       } catch (err: unknown) {
         const message =

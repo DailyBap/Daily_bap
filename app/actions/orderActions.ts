@@ -63,61 +63,70 @@ export async function getSlotCapacities(): Promise<Record<string, number>> {
  */
 export async function placeOrder(
   payload: PlaceOrderPayload
-): Promise<{ success: boolean; whatsappUrl: string; orderId: string }> {
-  const {
-    items,
-    customer,
-    subtotal,
-    requestedDeliveryTime,
-    deliverySlotLabel,
-  } = payload;
-
-  // 1. Server-side validation of requested delivery time slot
-  if (!requestedDeliveryTime || !deliverySlotLabel) {
-    throw new Error("Please select a delivery time slot before placing your order.");
-  }
-
-  const timeDate = new Date(requestedDeliveryTime);
-  const valResult = validateDeliveryTimeSlot(timeDate);
-  if (!valResult.valid) {
-    throw new Error(valResult.reason || "Invalid delivery time slot.");
-  }
-
-  // 2. Server-side distance & delivery fee calculation
-  let distanceKm: number | null = null;
-  if (customer.lat != null && customer.lng != null) {
-    distanceKm = haversineDistance(
-      KITCHEN_COORDS.lat,
-      KITCHEN_COORDS.lng,
-      customer.lat,
-      customer.lng
-    );
-
-    if (distanceKm > MAX_DELIVERY_RADIUS_KM) {
-      throw new Error(
-        `Your location is ${Math.round(distanceKm * 10) / 10}km away, which exceeds our maximum ${MAX_DELIVERY_RADIUS_KM}km delivery radius.`
-      );
-    }
-  }
-
-  const feeResult = calculateDeliveryFee(distanceKm, subtotal);
-  const validatedDeliveryFee = feeResult.fee;
-  const total = subtotal + validatedDeliveryFee;
-
-  // 3. Capacity Guard Check
-  const existingSlotOrders = await db
-    .select({ count: count(orders.id) })
-    .from(orders)
-    .where(eq(orders.deliverySlotLabel, deliverySlotLabel));
-
-  const slotOrderCount = Number(existingSlotOrders[0]?.count || 0);
-  if (slotOrderCount >= MAX_ORDERS_PER_SLOT) {
-    throw new Error(
-      `Selected time slot (${deliverySlotLabel}) has reached maximum order capacity. Please pick another slot.`
-    );
-  }
-
+): Promise<{ success: boolean; whatsappUrl?: string; orderId?: string; error?: string }> {
   try {
+    const {
+      items,
+      customer,
+      subtotal,
+      requestedDeliveryTime,
+      deliverySlotLabel,
+    } = payload;
+
+    // 1. Server-side validation of requested delivery time slot
+    if (!requestedDeliveryTime || !deliverySlotLabel) {
+      return {
+        success: false,
+        error: "Please select a delivery time slot before placing your order.",
+      };
+    }
+
+    const timeDate = new Date(requestedDeliveryTime);
+    const isAsap = deliverySlotLabel.startsWith("ASAP");
+    const valResult = validateDeliveryTimeSlot(timeDate, new Date(), isAsap);
+    if (!valResult.valid) {
+      return {
+        success: false,
+        error: valResult.reason || "Invalid delivery time slot.",
+      };
+    }
+
+    // 2. Server-side distance & delivery fee calculation
+    let distanceKm: number | null = null;
+    if (customer.lat != null && customer.lng != null) {
+      distanceKm = haversineDistance(
+        KITCHEN_COORDS.lat,
+        KITCHEN_COORDS.lng,
+        customer.lat,
+        customer.lng
+      );
+
+      if (distanceKm > MAX_DELIVERY_RADIUS_KM) {
+        return {
+          success: false,
+          error: `Your location is ${Math.round(distanceKm * 10) / 10}km away, which exceeds our maximum ${MAX_DELIVERY_RADIUS_KM}km delivery radius.`,
+        };
+      }
+    }
+
+    const feeResult = calculateDeliveryFee(distanceKm, subtotal);
+    const validatedDeliveryFee = feeResult.fee;
+    const total = subtotal + validatedDeliveryFee;
+
+    // 3. Capacity Guard Check
+    const existingSlotOrders = await db
+      .select({ count: count(orders.id) })
+      .from(orders)
+      .where(eq(orders.deliverySlotLabel, deliverySlotLabel));
+
+    const slotOrderCount = Number(existingSlotOrders[0]?.count || 0);
+    if (slotOrderCount >= MAX_ORDERS_PER_SLOT) {
+      return {
+        success: false,
+        error: `Selected time slot (${deliverySlotLabel}) has reached maximum order capacity. Please pick another slot.`,
+      };
+    }
+
     // 4. Find or create user
     let userId: string;
     const cleanPhone = customer.phone.replace(/\D/g, "");
@@ -171,7 +180,8 @@ export async function placeOrder(
     return { success: true, whatsappUrl, orderId: newOrder.id };
   } catch (error: unknown) {
     console.error("[placeOrder] Error saving order:", error);
-    const msg = error instanceof Error ? error.message : "Failed to place order.";
-    throw new Error(msg);
+    const msg =
+      error instanceof Error ? error.message : "Failed to place order. Please try again.";
+    return { success: false, error: msg };
   }
 }
