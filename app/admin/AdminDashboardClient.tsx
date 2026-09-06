@@ -5,7 +5,7 @@ import {
   updateOrderStatus,
   OrderStatus,
 } from "@/app/actions/adminActions";
-import { createOffer, toggleOffer } from "@/app/actions/offerActions";
+import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
 import {
   ShoppingBag,
   Tag,
@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
+  Edit,
+  Check,
+  X,
 } from "lucide-react";
 
 interface OrderItem {
@@ -120,6 +123,37 @@ export default function AdminDashboardClient({
       } else {
         setOfferError(res.error || "Failed to create offer.");
       }
+    });
+  };
+
+  // Edit offer state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCode, setEditCode] = useState("");
+
+  const startEditing = (offer: OfferRecord) => {
+    setEditingId(offer.id);
+    setEditTitle(offer.title);
+    setEditCode(offer.code);
+  };
+
+  const handleSaveEdit = (offerId: string) => {
+    if (!editTitle.trim() || !editCode.trim()) return;
+
+    const trimmedTitle = editTitle.trim();
+    const trimmedCode = editCode.trim().toUpperCase();
+
+    setOffersList((prev) =>
+      prev.map((off) =>
+        off.id === offerId
+          ? { ...off, title: trimmedTitle, code: trimmedCode }
+          : off
+      )
+    );
+    setEditingId(null);
+
+    startTransition(async () => {
+      await updateOffer(offerId, trimmedTitle, trimmedCode);
     });
   };
 
@@ -405,37 +439,88 @@ export default function AdminDashboardClient({
                         : "bg-gray-50 border-gray-200"
                     }`}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-sm text-gray-900">
-                          {offer.title}
-                        </span>
-                        {offer.isActive ? (
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                            Active Banner
-                          </span>
-                        ) : (
-                          <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                            Inactive
-                          </span>
-                        )}
+                    {editingId === offer.id ? (
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase">Title</label>
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-1 text-xs outline-none focus:border-brand-primary font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase">Promo Code</label>
+                          <input
+                            type="text"
+                            value={editCode}
+                            onChange={(e) => setEditCode(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-1 text-xs outline-none focus:border-brand-primary font-mono font-bold uppercase"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEdit(offer.id)}
+                            disabled={isPending}
+                            className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="inline-flex items-center justify-center gap-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1.5 px-3 rounded-lg text-xs transition"
+                          >
+                            <X className="w-3.5 h-3.5" /> Cancel
+                          </button>
+                        </div>
                       </div>
-                      <p className="font-mono text-xs text-brand-primary font-bold">
-                        Code: {offer.code}
-                      </p>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-sm text-gray-900">
+                              {offer.title}
+                            </span>
+                            {offer.isActive ? (
+                              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0">
+                                Active Banner
+                              </span>
+                            ) : (
+                              <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0">
+                                Inactive
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-mono text-xs text-brand-primary font-bold">
+                            Code: {offer.code}
+                          </p>
+                        </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleToggleOffer(offer.id, offer.isActive)}
-                      className={`w-full py-2 text-xs font-bold rounded-xl transition ${
-                        offer.isActive
-                          ? "bg-amber-600 hover:bg-amber-700 text-white"
-                          : "bg-gray-200 hover:bg-gray-300 text-gray-800"
-                      }`}
-                    >
-                      {offer.isActive ? "Deactivate Offer" : "Set as Active Banner"}
-                    </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleOffer(offer.id, offer.isActive)}
+                            className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
+                              offer.isActive
+                                ? "bg-amber-600 hover:bg-amber-700 text-white"
+                                : "bg-gray-200 hover:bg-gray-300 text-gray-800"
+                            }`}
+                          >
+                            {offer.isActive ? "Deactivate Offer" : "Set as Active Banner"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startEditing(offer)}
+                            className="inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-3 rounded-xl text-xs transition border border-gray-300"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-gray-600" /> Edit
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

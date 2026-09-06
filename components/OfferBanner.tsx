@@ -1,6 +1,6 @@
-// components/OfferBanner.tsx — Daily Offers Top Announcement Banner
+// components/OfferBanner.tsx — Global Active Offer Announcement Banner
 
-import { getActiveOffer } from "@/app/actions/adminActions";
+import { getActiveOffer } from "@/app/actions/offerActions";
 import { Tag } from "lucide-react";
 
 export default async function OfferBanner() {
@@ -11,15 +11,15 @@ export default async function OfferBanner() {
   }
 
   return (
-    <div className="bg-gradient-to-r from-[#445916] to-[#5a761e] text-white text-xs sm:text-sm font-medium py-2.5 px-4 text-center shadow-xs flex items-center justify-center gap-2 relative z-40">
-      <Tag className="w-4 h-4 text-brand-accent animate-pulse shrink-0" />
-      <span>
-        🎉 <strong className="font-bold">{activeOffer.title}</strong> — Use code:{" "}
-        <span className="font-mono font-bold bg-white/20 px-2 py-0.5 rounded text-white tracking-wider">
+    <div className="w-full bg-[#445916] text-white py-2.5 px-4 text-center shadow-md flex items-center justify-center gap-2 relative z-50">
+      <Tag className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
+      <p className="text-xs sm:text-sm font-semibold tracking-wide">
+        🎉 {activeOffer.title} - Use code:{" "}
+        <span className="font-mono font-bold bg-white/20 px-2 py-0.5 rounded tracking-wider">
           {activeOffer.code}
         </span>{" "}
         on WhatsApp!
-      </span>
+      </p>
     </div>
   );
 }

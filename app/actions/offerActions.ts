@@ -81,3 +81,46 @@ export async function toggleOffer(id: string, isActive: boolean) {
     return { success: false, error: "Failed to toggle offer" };
   }
 }
+
+/**
+ * Update an offer's title and code.
+ */
+export async function updateOffer(id: string, title: string, code: string) {
+  try {
+    if (!title.trim() || !code.trim()) {
+      return { success: false, error: "Title and promo code are required." };
+    }
+
+    await db
+      .update(offers)
+      .set({
+        title: title.trim(),
+        code: code.trim().toUpperCase(),
+      })
+      .where(eq(offers.id, id));
+
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("[updateOffer] Error updating offer:", error);
+    return { success: false, error: "Failed to update offer" };
+  }
+}
+
+/**
+ * Fetch the single currently active offer for the website banner.
+ */
+export async function getActiveOffer() {
+  try {
+    const result = await db
+      .select()
+      .from(offers)
+      .where(eq(offers.isActive, true))
+      .limit(1);
+    return result[0] || null;
+  } catch (error) {
+    console.error("[getActiveOffer] Error fetching active offer:", error);
+    return null;
+  }
+}

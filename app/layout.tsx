@@ -3,6 +3,7 @@ import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "@/config/brand";
 import { ChatWidget } from "@/components/ChatWidget";
+import OfferBanner from "@/components/OfferBanner";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -57,6 +58,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable}`}>
       <body className="font-body antialiased bg-white text-gray-800">
+        <OfferBanner />
         {children}
         <ChatWidget />
       </body>
