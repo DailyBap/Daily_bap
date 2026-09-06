@@ -23,6 +23,7 @@ interface PlaceOrderPayload {
   deliveryFee: number;
   requestedDeliveryTime?: string | Date | null;
   deliverySlotLabel?: string | null;
+  orderNumber?: string | null;
 }
 
 /**
@@ -56,10 +57,9 @@ export async function getSlotCapacities(): Promise<Record<string, number>> {
  * Server Action: Save the order to Neon DB and return WhatsApp deep link.
  * 1. Validate requested delivery slot server-side
  * 2. Recalculate distance and delivery fee server-side (never trust client fee)
- * 3. Check slot capacity
- * 4. Upsert user by phone number
- * 5. Insert order record (status: pending)
- * 6. Generate WhatsApp deep-link with order tracking link & slot label
+ * 3. Upsert user by phone number
+ * 4. Insert order record (status: pending, with orderNumber)
+ * 5. Generate WhatsApp deep-link with order tracking link & slot label
  */
 export async function placeOrder(
   payload: PlaceOrderPayload
@@ -72,6 +72,10 @@ export async function placeOrder(
       requestedDeliveryTime,
       deliverySlotLabel,
     } = payload;
+
+    const orderNumber =
+      payload.orderNumber ||
+      "BAP-" + Math.random().toString(36).substring(2, 6).toUpperCase();
 
     // 1. Server-side validation of requested delivery time slot
     if (!requestedDeliveryTime || !deliverySlotLabel) {
@@ -116,7 +120,7 @@ export async function placeOrder(
     const validatedDeliveryFee = feeResult.fee;
     const total = subtotal + validatedDeliveryFee;
 
-    // 4. Find or create user
+    // 3. Find or create user
     let userId: string;
     const cleanPhone = customer.phone.replace(/\D/g, "");
 
@@ -140,11 +144,12 @@ export async function placeOrder(
       userId = newUser.id;
     }
 
-    // 5. Insert order record
+    // 4. Insert order record
     const [newOrder] = await db
       .insert(orders)
       .values({
         userId,
+        orderNumber,
         items: items as unknown as Record<string, unknown>[],
         totalAmount: total,
         deliveryFee: validatedDeliveryFee,
@@ -156,14 +161,15 @@ export async function placeOrder(
       })
       .returning({ id: orders.id });
 
-    // 6. Generate WhatsApp deep-link
+    // 5. Generate WhatsApp deep-link
     const whatsappUrl = generateWhatsAppLink(
       items,
       customer,
       subtotal,
       validatedDeliveryFee,
       deliverySlotLabel,
-      newOrder.id
+      newOrder.id,
+      orderNumber
     );
 
     return { success: true, whatsappUrl, orderId: newOrder.id };

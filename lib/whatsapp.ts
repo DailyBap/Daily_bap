@@ -19,7 +19,8 @@ export function generateWhatsAppLink(
   subtotal: number,
   deliveryFee: number,
   deliverySlotLabel?: string | null,
-  orderId?: string | null
+  orderId?: string | null,
+  orderNumber?: string | null
 ): string {
   const total = subtotal + deliveryFee;
 
@@ -46,9 +47,11 @@ export function generateWhatsAppLink(
     ? `\n━━━━━━━━━━━━━━━━━━━━━━━\n📍 *TRACK YOUR ORDER:* https://daily-bap.vercel.app/orders/${orderId}`
     : "";
 
+  const orderHeader = orderNumber ? `🧾 *ORDER NO:* ${orderNumber}\n` : "";
+
   const message = `
 🍱 *NEW DAILY BAP PRE-ORDER*
-━━━━━━━━━━━━━━━━━━━━━━━
+${orderHeader}━━━━━━━━━━━━━━━━━━━━━━━
 *ORDER DETAILS*
 ${itemLines}
 

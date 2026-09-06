@@ -5,6 +5,7 @@ import {
   uuid,
   text,
   integer,
+  boolean,
   jsonb,
   timestamp,
   pgEnum,
@@ -37,6 +38,7 @@ export const users = pgTable("users", {
 // ----------------------------------------------------------
 export const orders = pgTable("orders", {
   id: uuid("id").defaultRandom().primaryKey(),
+  orderNumber: text("order_number"),
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id),
@@ -50,6 +52,17 @@ export const orders = pgTable("orders", {
   deliverySlotLabel: text("delivery_slot_label"),
   status: orderStatusEnum("status").notNull().default("pending"),
   whatsappSent: text("whatsapp_sent").default("no"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ----------------------------------------------------------
+// Offers Table
+// ----------------------------------------------------------
+export const offers = pgTable("offers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  title: text("title").notNull(),
+  code: text("code").notNull(),
+  isActive: boolean("is_active").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -70,5 +83,7 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
+export type Offer = typeof offers.$inferSelect;
+export type NewOffer = typeof offers.$inferInsert;
 export type ChatSession = typeof chatSessions.$inferSelect;
 export type NewChatSession = typeof chatSessions.$inferInsert;

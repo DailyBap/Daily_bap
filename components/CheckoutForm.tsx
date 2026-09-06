@@ -65,6 +65,9 @@ export default function CheckoutForm() {
     }
     setErrors({});
 
+    const orderNumber =
+      "BAP-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
     startTransition(async () => {
       try {
         const res = await placeOrder({
@@ -74,6 +77,7 @@ export default function CheckoutForm() {
           deliveryFee: getDeliveryFee(),
           requestedDeliveryTime,
           deliverySlotLabel,
+          orderNumber,
         });
 
         if (res?.success && res?.whatsappUrl) {
