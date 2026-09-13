@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { users, orders } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
+import { getKitchenStatus } from "@/app/actions/adminActions";
 import {
   calculateDeliveryFee,
   haversineDistance,
@@ -83,6 +84,16 @@ export async function placeOrder(
         success: false,
         error: "Please select a delivery time slot before placing your order.",
       };
+    }
+
+    if (deliverySlotLabel.startsWith("Today")) {
+      const isKitchenClosed = await getKitchenStatus();
+      if (isKitchenClosed) {
+        return {
+          success: false,
+          error: "Kitchen is currently closed for holidays. Please select a delivery slot for tomorrow.",
+        };
+      }
     }
 
     const valResult = validateDeliveryTimeSlot(

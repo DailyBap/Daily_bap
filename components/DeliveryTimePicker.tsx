@@ -7,6 +7,7 @@ import {
   isTodayOrderingClosed,
   DeliverySlotOption,
 } from "@/lib/deliverySlots";
+import { getKitchenStatus } from "@/app/actions/adminActions";
 import { useCartStore } from "@/store/useCartStore";
 import { deliveryTimeConfig } from "@/config/brand";
 
@@ -21,25 +22,39 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
   const [selectedDay, setSelectedDay] = useState<"today" | "tomorrow">("today");
   const [availableSlots, setAvailableSlots] = useState<DeliverySlotOption[]>([]);
   const [isTodayClosed, setIsTodayClosed] = useState(false);
+  const [isHolidayMode, setIsHolidayMode] = useState(false);
 
   // Initialize day selection and slot generation
   useEffect(() => {
-    const todayClosed = isTodayOrderingClosed();
-    setIsTodayClosed(todayClosed);
+    let isMounted = true;
+    async function checkStatus() {
+      const holidayClosed = await getKitchenStatus();
+      const cutoffClosed = isTodayOrderingClosed();
+      const todayClosed = holidayClosed || cutoffClosed;
 
-    const activeDay = todayClosed ? "tomorrow" : "today";
-    setSelectedDay(activeDay);
+      if (!isMounted) return;
+      setIsHolidayMode(holidayClosed);
+      setIsTodayClosed(todayClosed);
 
-    const { slots } = getAvailableSlots(activeDay);
-    setAvailableSlots(slots);
+      const activeDay = todayClosed ? "tomorrow" : "today";
+      setSelectedDay(activeDay);
 
-    // Auto-select first slot if nothing selected or if previously selected slot is for Today when Today is closed
-    if (
-      (!requestedDeliveryTime || !deliverySlotLabel || (todayClosed && deliverySlotLabel.startsWith("Today"))) &&
-      slots.length > 0
-    ) {
-      setDeliverySlot(slots[0].label, slots[0].label);
+      const { slots } = getAvailableSlots(activeDay);
+      setAvailableSlots(slots);
+
+      // Auto-select first slot if nothing selected or if previously selected slot is for Today when Today is closed
+      if (
+        (!requestedDeliveryTime || !deliverySlotLabel || (todayClosed && deliverySlotLabel.startsWith("Today"))) &&
+        slots.length > 0
+      ) {
+        setDeliverySlot(slots[0].label, slots[0].label);
+      }
     }
+
+    checkStatus();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Re-generate slots when selectedDay changes
@@ -99,7 +114,7 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
           <span>{deliveryTimeConfig.todayLabel}</span>
           {isTodayClosed && (
             <span className="text-[9px] bg-red-200 text-red-700 px-1.5 py-0.5 rounded uppercase font-semibold">
-              Closed
+              {isHolidayMode ? "Holiday" : "Closed"}
             </span>
           )}
         </button>
@@ -117,11 +132,15 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
         </button>
       </div>
 
-      {/* 10:00 PM Cutoff Alert */}
+      {/* Kitchen Closed / Holiday Alert */}
       {isTodayClosed && (
         <div className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-900 p-3 rounded-xl border border-amber-300 font-medium">
           <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>Kitchen is closed for today! Pre-order now for tomorrow's first delivery.</span>
+          <span>
+            {isHolidayMode
+              ? "🏖️ Kitchen is closed today for holidays! Pre-order now for tomorrow's first delivery."
+              : "Kitchen is closed for today! Pre-order now for tomorrow's first delivery."}
+          </span>
         </div>
       )}
 
@@ -157,3 +176,4 @@ export default function DeliveryTimePicker({ error }: DeliveryTimePickerProps) {
     </div>
   );
 }
+

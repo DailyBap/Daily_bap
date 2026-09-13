@@ -78,6 +78,15 @@ export const chatSessions = pgTable("chat_sessions", {
 });
 
 // ----------------------------------------------------------
+// Settings Table
+// ----------------------------------------------------------
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ----------------------------------------------------------
 // Inferred Types
 // ----------------------------------------------------------
 export type User = typeof users.$inferSelect;
@@ -88,3 +97,6 @@ export type Offer = typeof offers.$inferSelect;
 export type NewOffer = typeof offers.$inferInsert;
 export type ChatSession = typeof chatSessions.$inferSelect;
 export type NewChatSession = typeof chatSessions.$inferInsert;
+export type Setting = typeof settings.$inferSelect;
+export type NewSetting = typeof settings.$inferInsert;
+

@@ -3,7 +3,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, offers, users } from "@/lib/schema";
+import { orders, offers, users, settings } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -20,6 +20,59 @@ export async function verifyAdminPin(pin: string): Promise<boolean> {
   const adminPin = process.env.ADMIN_PIN || "1234";
   return pin === adminPin;
 }
+
+/**
+ * Fetch whether the kitchen is currently closed (e.g. during holidays).
+ */
+export async function getKitchenStatus(): Promise<boolean> {
+  try {
+    const result = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "kitchen_closed"))
+      .limit(1);
+
+    return result[0]?.value === "true";
+  } catch (error) {
+    console.error("[getKitchenStatus] Error fetching kitchen status:", error);
+    return false;
+  }
+}
+
+/**
+ * Toggle kitchen closed status (Holiday Mode).
+ */
+export async function toggleKitchenStatus(isClosed: boolean) {
+  try {
+    const value = isClosed ? "true" : "false";
+
+    const existing = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "kitchen_closed"))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(settings)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(settings.key, "kitchen_closed"));
+    } else {
+      await db.insert(settings).values({
+        key: "kitchen_closed",
+        value,
+      });
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { success: true, isClosed };
+  } catch (error) {
+    console.error("[toggleKitchenStatus] Error updating kitchen status:", error);
+    return { success: false, error: "Failed to update kitchen status" };
+  }
+}
+
 
 /**
  * Fetch all orders ordered by newest first, joining customer info.

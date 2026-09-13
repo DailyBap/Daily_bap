@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   updateOrderStatus,
+  toggleKitchenStatus,
   OrderStatus,
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
@@ -55,6 +56,7 @@ interface OfferRecord {
 interface AdminDashboardClientProps {
   initialOrders: OrderRecord[];
   initialOffers: OfferRecord[];
+  initialKitchenClosed?: boolean;
 }
 
 const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
@@ -70,9 +72,11 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
 export default function AdminDashboardClient({
   initialOrders,
   initialOffers,
+  initialKitchenClosed = false,
 }: AdminDashboardClientProps) {
   const [ordersList, setOrdersList] = useState<OrderRecord[]>(initialOrders);
   const [offersList, setOffersList] = useState<OfferRecord[]>(initialOffers);
+  const [isKitchenClosed, setIsKitchenClosed] = useState<boolean>(initialKitchenClosed);
 
   // New offer form state
   const [newTitle, setNewTitle] = useState("");
@@ -174,6 +178,15 @@ export default function AdminDashboardClient({
     });
   };
 
+  // Handle kitchen closed status toggle
+  const handleToggleKitchenStatus = () => {
+    const nextState = !isKitchenClosed;
+    setIsKitchenClosed(nextState);
+    startTransition(async () => {
+      await toggleKitchenStatus(nextState);
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50/50 font-sans p-4 sm:p-6 lg:p-8 space-y-8">
       {/* Top Header */}
@@ -190,6 +203,77 @@ export default function AdminDashboardClient({
       </div>
 
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* ======================================================== */}
+        {/* KITCHEN OPERATIONAL STATUS CARD */}
+        {/* ======================================================== */}
+        <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-4">
+            <div
+              className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
+                isKitchenClosed
+                  ? "bg-rose-100 text-rose-700"
+                  : "bg-emerald-100 text-emerald-700"
+              }`}
+            >
+              {isKitchenClosed ? (
+                <AlertCircle className="w-6 h-6" />
+              ) : (
+                <CheckCircle2 className="w-6 h-6" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-display font-bold text-lg text-gray-900">
+                  Kitchen Status:{" "}
+                  <span
+                    className={
+                      isKitchenClosed ? "text-rose-600" : "text-emerald-700"
+                    }
+                  >
+                    {isKitchenClosed ? "CLOSED (Holiday Mode)" : "OPEN (Operational)"}
+                  </span>
+                </h2>
+                <span
+                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                    isKitchenClosed
+                      ? "bg-rose-100 text-rose-800 border border-rose-200"
+                      : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                  }`}
+                >
+                  {isKitchenClosed ? "Holiday Mode Active" : "Normal Hours"}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {isKitchenClosed
+                  ? "Same-day ('Today') ordering is disabled on the website. Customers can only pre-order for tomorrow."
+                  : "Kitchen is accepting normal orders for Today and Tomorrow."}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleToggleKitchenStatus}
+            className={`px-5 py-3 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 ${
+              isKitchenClosed
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "bg-rose-600 hover:bg-rose-700 text-white"
+            } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
+          >
+            {isKitchenClosed ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                Turn Kitchen OPEN
+              </>
+            ) : (
+              <>
+                <AlertCircle className="w-4 h-4" />
+                Kitchen Closed Button (Holiday Mode)
+              </>
+            )}
+          </button>
+        </section>
         {/* ======================================================== */}
         {/* ORDERS SECTION */}
         {/* ======================================================== */}
