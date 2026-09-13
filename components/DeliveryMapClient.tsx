@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, Circle } from "react-leaflet";
 import { useCartStore } from "@/store/useCartStore";
 import {
@@ -11,38 +12,13 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Fix Leaflet default icon path issues in Next.js
-delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
-
-// Custom pin icon for user location
-const userIcon = new L.Icon({
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-// Kitchen marker icon (brand color)
-const kitchenIcon = new L.DivIcon({
-  html: `<div style="background:#445916;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`,
-  className: "",
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-});
-
 // ----------------------------------------------------------
 // Inner component that handles map click/drag for pin drop
 // ----------------------------------------------------------
-function PinDropper() {
-  const { customerInfo, setCustomerInfo, setDeliverable } = useCartStore();
+function PinDropper({ userIcon }: { userIcon: L.Icon | null }) {
+  const customerInfo = useCartStore((s) => s.customerInfo);
+  const setCustomerInfo = useCartStore((s) => s.setCustomerInfo);
+  const setDeliverable = useCartStore((s) => s.setDeliverable);
 
   useMapEvents({
     click(e) {
@@ -53,7 +29,7 @@ function PinDropper() {
     },
   });
 
-  if (!customerInfo.lat || !customerInfo.lng) return null;
+  if (!customerInfo.lat || !customerInfo.lng || !userIcon) return null;
 
   return (
     <Marker
@@ -76,8 +52,41 @@ function PinDropper() {
 // Main DeliveryMap export
 // ----------------------------------------------------------
 export default function DeliveryMapClient() {
-  const { customerInfo, isDeliverable, distanceKm, getSubtotal } = useCartStore();
+  const customerInfo = useCartStore((s) => s.customerInfo);
+  const isDeliverable = useCartStore((s) => s.isDeliverable);
+  const distanceKm = useCartStore((s) => s.distanceKm);
+  const getSubtotal = useCartStore((s) => s.getSubtotal);
   const subtotal = getSubtotal();
+
+  const [icons, setIcons] = useState<{ userIcon: L.Icon; kitchenIcon: L.DivIcon } | null>(null);
+
+  useEffect(() => {
+    delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+      iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+      shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+    });
+
+    const userIcon = new L.Icon({
+      iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+      iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+      shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
+    });
+
+    const kitchenIcon = new L.DivIcon({
+      html: `<div style="background:#445916;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`,
+      className: "",
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+
+    setIcons({ userIcon, kitchenIcon });
+  }, []);
 
   return (
     <div className="relative w-full">
@@ -152,15 +161,20 @@ export default function DeliveryMapClient() {
           }}
         />
 
-        {/* Kitchen marker */}
-        <Marker
-          position={[KITCHEN_COORDS.lat, KITCHEN_COORDS.lng]}
-          icon={kitchenIcon}
-        />
+        {icons && (
+          <>
+            {/* Kitchen marker */}
+            <Marker
+              position={[KITCHEN_COORDS.lat, KITCHEN_COORDS.lng]}
+              icon={icons.kitchenIcon}
+            />
 
-        {/* User pin dropper */}
-        <PinDropper />
+            {/* User pin dropper */}
+            <PinDropper userIcon={icons.userIcon} />
+          </>
+        )}
       </MapContainer>
     </div>
   );
 }
+

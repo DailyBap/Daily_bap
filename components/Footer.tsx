@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { siteConfig } from "@/config/brand";
-import { MessageCircle, MapPin, Clock } from "lucide-react";
+import { MessageCircle, MapPin, Clock, ShieldCheck } from "lucide-react";
 
 // Inline Instagram SVG (not in this lucide-react version)
 function InstagramIcon({ size = 14 }: { size?: number }) {
@@ -91,7 +92,14 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="border-t border-white/10 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/30">
           <p>© {new Date().getFullYear()} {siteConfig.name}. All rights reserved.</p>
-          <p>{siteConfig.notice}</p>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/policies"
+              className="text-white/60 hover:text-brand-accent transition-colors flex items-center gap-1 font-medium"
+            >
+              <ShieldCheck size={14} /> Terms, Refund & Privacy Policies
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

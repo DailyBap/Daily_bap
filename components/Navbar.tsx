@@ -52,6 +52,7 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
                 src="/English_logo.jpg"
                 alt="Daily Bap English Logo"
                 fill
+                sizes="40px"
                 className={`transition-opacity duration-700 absolute inset-0 object-cover scale-[1.12] ${
                   isAssamese ? "opacity-0" : "opacity-100"
                 }`}
@@ -60,6 +61,7 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
                 src="/Axomia_logo.png"
                 alt="Daily Bap Assamese Logo"
                 fill
+                sizes="40px"
                 className={`transition-opacity duration-700 absolute inset-0 object-cover scale-[1.12] ${
                   isAssamese ? "opacity-100" : "opacity-0"
                 }`}

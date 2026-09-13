@@ -19,16 +19,14 @@ const DeliveryMap = dynamic(() => import("./DeliveryMapClient"), {
 });
 
 export default function CheckoutForm() {
-  const {
-    customerInfo,
-    setCustomerInfo,
-    items,
-    getSubtotal,
-    getDeliveryFee,
-    isDeliverable,
-    requestedDeliveryTime,
-    deliverySlotLabel,
-  } = useCartStore();
+  const customerInfo = useCartStore((s) => s.customerInfo);
+  const setCustomerInfo = useCartStore((s) => s.setCustomerInfo);
+  const items = useCartStore((s) => s.items);
+  const getSubtotal = useCartStore((s) => s.getSubtotal);
+  const getDeliveryFee = useCartStore((s) => s.getDeliveryFee);
+  const isDeliverable = useCartStore((s) => s.isDeliverable);
+  const requestedDeliveryTime = useCartStore((s) => s.requestedDeliveryTime);
+  const deliverySlotLabel = useCartStore((s) => s.deliverySlotLabel);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
