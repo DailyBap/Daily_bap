@@ -343,9 +343,9 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
               <span>Tag @daily.bap.guwahati</span>
             </a>
 
-            {/* TODO: Replace with Google Business Review Link */}
+            {/* Google Business Review Link */}
             <a
-              href="#"
+              href={siteConfig.contact.googleReviewUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-bold py-3 px-5 rounded-2xl text-xs sm:text-sm transition-all hover:scale-[1.02]"

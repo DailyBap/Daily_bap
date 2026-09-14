@@ -19,6 +19,7 @@ export const siteConfig = {
     whatsapp: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "919999999999",
     instagram: "@daily.bap.guwahati",
     instagramUrl: "https://www.instagram.com/daily.bap.guwahati/",
+    googleReviewUrl: "https://g.page/r/CeKt9rDETbXDEBM/review",
     city: "Guwahati, Assam",
   },
   model: "100% Pre-Order",
