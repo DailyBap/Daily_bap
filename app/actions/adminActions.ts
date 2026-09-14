@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { orders, offers, users, settings } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { siteConfig } from "@/config/brand";
 
 export type OrderStatus =
   | "draft"
@@ -73,6 +74,57 @@ export async function toggleKitchenStatus(isClosed: boolean) {
   }
 }
 
+/**
+ * Fetch whether auto post-delivery review request is active (defaults to true).
+ */
+export async function getAutoReviewRequestStatus(): Promise<boolean> {
+  try {
+    const result = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "auto_review_request"))
+      .limit(1);
+
+    if (result.length === 0) return true; // Default: active
+    return result[0].value === "true";
+  } catch (error) {
+    console.error("[getAutoReviewRequestStatus] Error fetching setting:", error);
+    return true;
+  }
+}
+
+/**
+ * Toggle auto review request setting.
+ */
+export async function toggleAutoReviewRequest(enabled: boolean) {
+  try {
+    const value = enabled ? "true" : "false";
+
+    const existing = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "auto_review_request"))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(settings)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(settings.key, "auto_review_request"));
+    } else {
+      await db.insert(settings).values({
+        key: "auto_review_request",
+        value,
+      });
+    }
+
+    revalidatePath("/admin");
+    return { success: true, enabled };
+  } catch (error) {
+    console.error("[toggleAutoReviewRequest] Error updating review setting:", error);
+    return { success: false, error: "Failed to update review setting" };
+  }
+}
 
 /**
  * Fetch all orders ordered by newest first, joining customer info.
@@ -107,6 +159,7 @@ export async function getAllOrders() {
 
 /**
  * Update status of an order (e.g. 'pending', 'preparing', 'out_for_delivery', 'delivered').
+ * Triggers post-delivery Google Review request if auto_review_request setting is active.
  */
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus) {
   try {
@@ -114,6 +167,62 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
       .update(orders)
       .set({ status: newStatus })
       .where(eq(orders.id, orderId));
+
+    // Non-blocking trigger for post-delivery Google Review request
+    if (newStatus === "delivered") {
+      try {
+        const isAutoReviewActive = await getAutoReviewRequestStatus();
+        if (isAutoReviewActive) {
+          const orderRes = await db
+            .select({
+              order: orders,
+              user: users,
+            })
+            .from(orders)
+            .leftJoin(users, eq(orders.userId, users.id))
+            .where(eq(orders.id, orderId))
+            .limit(1);
+
+          if (orderRes.length > 0 && orderRes[0].user?.phone) {
+            const customerName = orderRes[0].user.name || "Customer";
+            const orderNo =
+              orderRes[0].order.orderNumber ||
+              `BAP-${orderId.slice(0, 5).toUpperCase()}`;
+            const reviewUrl = siteConfig.contact.googleReviewUrl;
+            const messageText = `Hey ${customerName}! Thank you for ordering from Daily Bap 🍱 We hope you enjoyed your meal! Could you take a moment to leave us a Google review? It helps us immensely: ${reviewUrl}`;
+
+            const pageAccessToken = process.env.META_PAGE_ACCESS_TOKEN;
+            if (pageAccessToken) {
+              await fetch(
+                `https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    recipient: { phone_number: orderRes[0].user.phone },
+                    message: { text: messageText },
+                  }),
+                }
+              ).catch((err) =>
+                console.error(
+                  "[Post-Delivery Review Ping]: Meta API call error:",
+                  err
+                )
+              );
+            }
+
+            console.log(
+              `[Post-Delivery Review Ping]: Automated trigger sent for Order ${orderNo} (${orderRes[0].user.phone}): ${messageText}`
+            );
+          }
+        }
+      } catch (reviewErr) {
+        console.error(
+          "[updateOrderStatus] Non-blocking error triggering review request:",
+          reviewErr
+        );
+      }
+    }
 
     revalidatePath("/admin");
     return { success: true };

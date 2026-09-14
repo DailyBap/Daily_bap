@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   updateOrderStatus,
   toggleKitchenStatus,
+  toggleAutoReviewRequest,
   OrderStatus,
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
@@ -21,6 +22,7 @@ import {
   Edit,
   Check,
   X,
+  Star,
 } from "lucide-react";
 
 interface OrderItem {
@@ -57,6 +59,7 @@ interface AdminDashboardClientProps {
   initialOrders: OrderRecord[];
   initialOffers: OfferRecord[];
   initialKitchenClosed?: boolean;
+  initialAutoReviewRequest?: boolean;
 }
 
 const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
@@ -73,10 +76,12 @@ export default function AdminDashboardClient({
   initialOrders,
   initialOffers,
   initialKitchenClosed = false,
+  initialAutoReviewRequest = true,
 }: AdminDashboardClientProps) {
   const [ordersList, setOrdersList] = useState<OrderRecord[]>(initialOrders);
   const [offersList, setOffersList] = useState<OfferRecord[]>(initialOffers);
   const [isKitchenClosed, setIsKitchenClosed] = useState<boolean>(initialKitchenClosed);
+  const [isAutoReviewActive, setIsAutoReviewActive] = useState<boolean>(initialAutoReviewRequest);
 
   // New offer form state
   const [newTitle, setNewTitle] = useState("");
@@ -187,6 +192,15 @@ export default function AdminDashboardClient({
     });
   };
 
+  // Handle auto review request toggle
+  const handleToggleAutoReview = () => {
+    const nextState = !isAutoReviewActive;
+    setIsAutoReviewActive(nextState);
+    startTransition(async () => {
+      await toggleAutoReviewRequest(nextState);
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50/50 font-sans p-4 sm:p-6 lg:p-8 space-y-8">
       {/* Top Header */}
@@ -204,76 +218,134 @@ export default function AdminDashboardClient({
 
       <div className="max-w-7xl mx-auto space-y-8">
         {/* ======================================================== */}
-        {/* KITCHEN OPERATIONAL STATUS CARD */}
+        {/* KITCHEN OPERATIONAL STATUS & AUTO REVIEW TOGGLES */}
         {/* ======================================================== */}
-        <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start sm:items-center gap-4">
-            <div
-              className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Kitchen Status Card */}
+          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4">
+              <div
+                className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
+                  isKitchenClosed
+                    ? "bg-rose-100 text-rose-700"
+                    : "bg-emerald-100 text-emerald-700"
+                }`}
+              >
+                {isKitchenClosed ? (
+                  <AlertCircle className="w-6 h-6" />
+                ) : (
+                  <CheckCircle2 className="w-6 h-6" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="font-display font-bold text-base text-gray-900">
+                    Kitchen Status:{" "}
+                    <span
+                      className={
+                        isKitchenClosed ? "text-rose-600" : "text-emerald-700"
+                      }
+                    >
+                      {isKitchenClosed ? "CLOSED" : "OPEN"}
+                    </span>
+                  </h2>
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                      isKitchenClosed
+                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    }`}
+                  >
+                    {isKitchenClosed ? "Holiday Mode" : "Normal Hours"}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {isKitchenClosed
+                    ? "Same-day ordering is disabled on the website."
+                    : "Kitchen accepting orders for Today & Tomorrow."}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleToggleKitchenStatus}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 ${
                 isKitchenClosed
-                  ? "bg-rose-100 text-rose-700"
-                  : "bg-emerald-100 text-emerald-700"
-              }`}
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-rose-600 hover:bg-rose-700 text-white"
+              } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               {isKitchenClosed ? (
-                <AlertCircle className="w-6 h-6" />
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  Turn OPEN
+                </>
               ) : (
-                <CheckCircle2 className="w-6 h-6" />
+                <>
+                  <AlertCircle className="w-4 h-4" />
+                  Holiday Mode
+                </>
               )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-display font-bold text-lg text-gray-900">
-                  Kitchen Status:{" "}
-                  <span
-                    className={
-                      isKitchenClosed ? "text-rose-600" : "text-emerald-700"
-                    }
-                  >
-                    {isKitchenClosed ? "CLOSED (Holiday Mode)" : "OPEN (Operational)"}
-                  </span>
-                </h2>
-                <span
-                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                    isKitchenClosed
-                      ? "bg-rose-100 text-rose-800 border border-rose-200"
-                      : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                  }`}
-                >
-                  {isKitchenClosed ? "Holiday Mode Active" : "Normal Hours"}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {isKitchenClosed
-                  ? "Same-day ('Today') ordering is disabled on the website. Customers can only pre-order for tomorrow."
-                  : "Kitchen is accepting normal orders for Today and Tomorrow."}
-              </p>
-            </div>
-          </div>
+            </button>
+          </section>
 
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={handleToggleKitchenStatus}
-            className={`px-5 py-3 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 ${
-              isKitchenClosed
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                : "bg-rose-600 hover:bg-rose-700 text-white"
-            } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
-          >
-            {isKitchenClosed ? (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                Turn Kitchen OPEN
-              </>
-            ) : (
-              <>
-                <AlertCircle className="w-4 h-4" />
-                Kitchen Closed Button (Holiday Mode)
-              </>
-            )}
-          </button>
-        </section>
+          {/* Post-Delivery Review Ping Card */}
+          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4">
+              <div
+                className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
+                  isAutoReviewActive
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                <Star className="w-6 h-6 fill-current text-amber-500" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="font-display font-bold text-base text-gray-900">
+                    Post-Delivery Review Ping:{" "}
+                    <span
+                      className={
+                        isAutoReviewActive ? "text-amber-600" : "text-gray-500"
+                      }
+                    >
+                      {isAutoReviewActive ? "ACTIVE" : "DISABLED"}
+                    </span>
+                  </h2>
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                      isAutoReviewActive
+                        ? "bg-amber-100 text-amber-800 border border-amber-200"
+                        : "bg-gray-100 text-gray-600 border border-gray-200"
+                    }`}
+                  >
+                    {isAutoReviewActive ? "Auto Trigger On" : "Manual Only"}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Sends Google Review link upon order completion (`delivered`).
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleToggleAutoReview}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 ${
+                isAutoReviewActive
+                  ? "bg-amber-500 hover:bg-amber-600 text-white"
+                  : "bg-gray-700 hover:bg-gray-800 text-white"
+              } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
+            >
+              <Star className="w-4 h-4" />
+              {isAutoReviewActive ? "Disable Ping" : "Enable Ping"}
+            </button>
+          </section>
+        </div>
         {/* ======================================================== */}
         {/* ORDERS SECTION */}
         {/* ======================================================== */}
@@ -322,9 +394,13 @@ export default function AdminDashboardClient({
                     const deliveryMsg = encodeURIComponent(
                       `Great news! Your order (${displayOrderNo}) is out for delivery! 🛵`
                     );
+                    const reviewMsg = encodeURIComponent(
+                      `Hey ${name}! Thank you for ordering from Daily Bap 🍱 We hope you enjoyed your meal! Could you take a moment to leave us a Google review? It helps us immensely: https://g.page/r/CeKt9rDETbXDEBM/review`
+                    );
 
                     const prepLink = `https://wa.me/91${cleanPhone}?text=${prepMsg}`;
                     const deliveryLink = `https://wa.me/91${cleanPhone}?text=${deliveryMsg}`;
+                    const reviewLink = `https://wa.me/91${cleanPhone}?text=${reviewMsg}`;
 
                     return (
                       <tr
@@ -428,6 +504,16 @@ export default function AdminDashboardClient({
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
                             Out for Delivery 🛵
+                          </a>
+
+                          <a
+                            href={reviewLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1.5 rounded-xl border border-amber-200 transition"
+                          >
+                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                            Review Ping ⭐️
                           </a>
                         </td>
                       </tr>

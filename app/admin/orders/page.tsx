@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { verifyAdminPin, updateOrderStatus } from "@/app/actions/adminActions";
-import { Clock, Phone, MapPin, CheckCircle, Lock, RefreshCw } from "lucide-react";
+import { Clock, Phone, MapPin, CheckCircle, Lock, RefreshCw, Star } from "lucide-react";
 import { siteConfig } from "@/config/brand";
 
 interface OrderItem {
@@ -156,82 +156,103 @@ export default function AdminOrdersPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {ordersList.map((order) => (
-              <div
-                key={order.id}
-                className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6"
-              >
-                {/* Delivery Slot Badge & Order Info */}
-                <div className="space-y-2 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="bg-[#445916] text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#9da613]" />
-                      {order.deliverySlotLabel || "ASAP"}
+            {ordersList.map((order) => {
+              const rawPhone = order.userPhone?.replace(/\D/g, "") || "";
+              const cleanPhone = rawPhone.length === 10 ? rawPhone : rawPhone.slice(-10);
+              const reviewMsg = encodeURIComponent(
+                `Hey ${order.userName || "Customer"}! Thank you for ordering from Daily Bap 🍱 We hope you enjoyed your meal! Could you take a moment to leave us a Google review? It helps us immensely: https://g.page/r/CeKt9rDETbXDEBM/review`
+              );
+              const reviewLink = `https://wa.me/91${cleanPhone}?text=${reviewMsg}`;
+
+              return (
+                <div
+                  key={order.id}
+                  className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6"
+                >
+                  {/* Delivery Slot Badge & Order Info */}
+                  <div className="space-y-2 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="bg-[#445916] text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#9da613]" />
+                        {order.deliverySlotLabel || "ASAP"}
+                      </span>
+                      <span className="text-xs font-mono text-gray-400">
+                        ID: {order.id.slice(0, 8)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-gray-900 text-base">
+                        {order.userName}
+                      </h3>
+                      <p className="text-xs text-gray-600 flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-[#445916]" /> +91 {order.userPhone}
+                      </p>
+                      <p className="text-xs text-gray-600 flex items-start gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-[#445916] shrink-0 mt-0.5" />
+                        <span>{order.deliveryAddress}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Items & Total */}
+                  <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 min-w-[240px] space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                      Order Summary
                     </span>
-                    <span className="text-xs font-mono text-gray-400">
-                      ID: {order.id.slice(0, 8)}
-                    </span>
+                    <div className="text-xs text-gray-800 space-y-1">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between font-medium">
+                          <span>{item.name || item.summary}</span>
+                          {item.quantity && (
+                            <span className="text-gray-500">×{item.quantity}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t border-gray-200 flex justify-between font-bold text-xs text-gray-900">
+                      <span>Total (Inc. delivery):</span>
+                      <span className="text-[#445916]">₹{order.totalAmount}</span>
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-gray-900 text-base">
-                      {order.userName}
-                    </h3>
-                    <p className="text-xs text-gray-600 flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5 text-[#445916]" /> +91 {order.userPhone}
-                    </p>
-                    <p className="text-xs text-gray-600 flex items-start gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#445916] shrink-0 mt-0.5" />
-                      <span>{order.deliveryAddress}</span>
-                    </p>
-                  </div>
-                </div>
+                  {/* Status Selector & Review Action */}
+                  <div className="shrink-0 space-y-2 flex flex-col items-start">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                        Update Status
+                      </label>
+                      <select
+                        value={order.status}
+                        onChange={(e) =>
+                          handleStatusChange(
+                            order.id,
+                            e.target.value as AdminOrder["status"]
+                          )
+                        }
+                        className="bg-gray-50 text-gray-800 font-bold text-xs px-3 py-2 rounded-xl border border-gray-300 focus:border-[#445916] focus:outline-none"
+                      >
+                        {STATUS_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                {/* Items & Total */}
-                <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 min-w-[240px] space-y-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                    Order Summary
-                  </span>
-                  <div className="text-xs text-gray-800 space-y-1">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between font-medium">
-                        <span>{item.name || item.summary}</span>
-                        {item.quantity && (
-                          <span className="text-gray-500">×{item.quantity}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="pt-2 border-t border-gray-200 flex justify-between font-bold text-xs text-gray-900">
-                    <span>Total (Inc. delivery):</span>
-                    <span className="text-[#445916]">₹{order.totalAmount}</span>
+                    <a
+                      href={reviewLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1.5 rounded-xl border border-amber-200 transition"
+                    >
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      Review Ping ⭐️
+                    </a>
                   </div>
                 </div>
-
-                {/* Status Selector */}
-                <div className="shrink-0 space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                    Update Status
-                  </label>
-                  <select
-                    value={order.status}
-                    onChange={(e) =>
-                      handleStatusChange(
-                        order.id,
-                        e.target.value as AdminOrder["status"]
-                      )
-                    }
-                    className="bg-gray-50 text-gray-800 font-bold text-xs px-3 py-2 rounded-xl border border-gray-300 focus:border-[#445916] focus:outline-none"
-                  >
-                    {STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
