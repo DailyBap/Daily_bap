@@ -6,11 +6,16 @@ import { db } from "@/lib/db";
 import { offers } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { verifyAdminSession } from "@/lib/adminAuth";
 
 /**
- * Fetch all offers, ordered by newest first.
+ * Fetch all offers, ordered by newest first. Requires Admin Auth.
  */
 export async function getOffers() {
+  if (!(await verifyAdminSession())) {
+    return [];
+  }
+
   try {
     const result = await db
       .select()
@@ -24,9 +29,13 @@ export async function getOffers() {
 }
 
 /**
- * Create a new offer using FormData or explicit title/code arguments.
+ * Create a new offer using FormData or explicit title/code arguments. Requires Admin Auth.
  */
 export async function createOffer(data: FormData | { title: string; code: string }) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     let title = "";
     let code = "";
@@ -59,9 +68,13 @@ export async function createOffer(data: FormData | { title: string; code: string
 }
 
 /**
- * Toggle an offer's active status.
+ * Toggle an offer's active status. Requires Admin Auth.
  */
 export async function toggleOffer(id: string, isActive: boolean) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     if (isActive) {
       // Deactivate all existing active offers to enforce single active banner rule
@@ -83,9 +96,13 @@ export async function toggleOffer(id: string, isActive: boolean) {
 }
 
 /**
- * Update an offer's title and code.
+ * Update an offer's title and code. Requires Admin Auth.
  */
 export async function updateOffer(id: string, title: string, code: string) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     if (!title.trim() || !code.trim()) {
       return { success: false, error: "Title and promo code are required." };
@@ -109,7 +126,7 @@ export async function updateOffer(id: string, title: string, code: string) {
 }
 
 /**
- * Fetch the single currently active offer for the website banner.
+ * Fetch the single currently active offer for the website banner. Public read-only.
  */
 export async function getActiveOffer() {
   try {
@@ -124,3 +141,4 @@ export async function getActiveOffer() {
     return null;
   }
 }
+

@@ -7,6 +7,11 @@ import { orders, offers, users, settings } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { siteConfig } from "@/config/brand";
+import {
+  loginAdmin,
+  verifyAdminSession,
+  logoutAdmin,
+} from "@/lib/adminAuth";
 
 export type OrderStatus =
   | "draft"
@@ -17,13 +22,32 @@ export type OrderStatus =
   | "delivered"
   | "cancelled";
 
-export async function verifyAdminPin(pin: string): Promise<boolean> {
-  const adminPin = process.env.ADMIN_PIN || "1234";
-  return pin === adminPin;
+/**
+ * Server Action: Login admin with password & rate limiting check
+ */
+export async function loginAdminAction(password: string) {
+  return await loginAdmin(password);
+}
+
+/**
+ * Server Action: Logout admin & clear session cookie
+ */
+export async function logoutAdminAction() {
+  await logoutAdmin();
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+/**
+ * Server Action: Verify current admin session
+ */
+export async function checkAdminSessionAction(): Promise<boolean> {
+  return await verifyAdminSession();
 }
 
 /**
  * Fetch whether the kitchen is currently closed (e.g. during holidays).
+ * Public read-only for checkout scheduling logic.
  */
 export async function getKitchenStatus(): Promise<boolean> {
   try {
@@ -41,9 +65,13 @@ export async function getKitchenStatus(): Promise<boolean> {
 }
 
 /**
- * Toggle kitchen closed status (Holiday Mode).
+ * Toggle kitchen closed status (Holiday Mode). Requires Admin Auth.
  */
 export async function toggleKitchenStatus(isClosed: boolean) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     const value = isClosed ? "true" : "false";
 
@@ -76,6 +104,7 @@ export async function toggleKitchenStatus(isClosed: boolean) {
 
 /**
  * Fetch whether auto post-delivery review request is active (defaults to true).
+ * Public read-only helper.
  */
 export async function getAutoReviewRequestStatus(): Promise<boolean> {
   try {
@@ -94,9 +123,13 @@ export async function getAutoReviewRequestStatus(): Promise<boolean> {
 }
 
 /**
- * Toggle auto review request setting.
+ * Toggle auto review request setting. Requires Admin Auth.
  */
 export async function toggleAutoReviewRequest(enabled: boolean) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     const value = enabled ? "true" : "false";
 
@@ -127,9 +160,13 @@ export async function toggleAutoReviewRequest(enabled: boolean) {
 }
 
 /**
- * Fetch all orders ordered by newest first, joining customer info.
+ * Fetch all orders ordered by newest first, joining customer info. Requires Admin Auth.
  */
 export async function getAllOrders() {
+  if (!(await verifyAdminSession())) {
+    return [];
+  }
+
   try {
     const result = await db
       .select({
@@ -142,6 +179,9 @@ export async function getAllOrders() {
         requestedDeliveryTime: orders.requestedDeliveryTime,
         deliverySlotLabel: orders.deliverySlotLabel,
         items: orders.items,
+        couponCode: orders.couponCode,
+        discountAmount: orders.discountAmount,
+        commissionAmount: orders.commissionAmount,
         createdAt: orders.createdAt,
         userName: users.name,
         userPhone: users.phone,
@@ -158,10 +198,14 @@ export async function getAllOrders() {
 }
 
 /**
- * Update status of an order (e.g. 'pending', 'preparing', 'out_for_delivery', 'delivered').
+ * Update status of an order (e.g. 'pending', 'preparing', 'out_for_delivery', 'delivered'). Requires Admin Auth.
  * Triggers post-delivery Google Review request if auto_review_request setting is active.
  */
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     await db
       .update(orders)
@@ -233,9 +277,13 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
 }
 
 /**
- * Fetch all offers ordered by newest first.
+ * Fetch all offers ordered by newest first. Requires Admin Auth.
  */
 export async function getAllOffers() {
+  if (!(await verifyAdminSession())) {
+    return [];
+  }
+
   try {
     const result = await db
       .select()
@@ -249,7 +297,7 @@ export async function getAllOffers() {
 }
 
 /**
- * Get the single active offer for the frontend banner.
+ * Get the single active offer for the frontend banner. Public read-only.
  */
 export async function getActiveOffer() {
   try {
@@ -267,9 +315,13 @@ export async function getActiveOffer() {
 }
 
 /**
- * Create a new offer record.
+ * Create a new offer record. Requires Admin Auth.
  */
 export async function createNewOffer(title: string, code: string) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     if (!title.trim() || !code.trim()) {
       return { success: false, error: "Title and code are required." };
@@ -291,9 +343,13 @@ export async function createNewOffer(title: string, code: string) {
 }
 
 /**
- * Toggle an offer's isActive state. If turning active, deactivates all other offers first.
+ * Toggle an offer's isActive state. Requires Admin Auth.
  */
 export async function toggleOffer(offerId: string, isActive: boolean) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     if (isActive) {
       // Deactivate all offers first so only 1 single active offer exists
@@ -313,3 +369,4 @@ export async function toggleOffer(offerId: string, isActive: boolean) {
     return { success: false, error: "Failed to toggle offer" };
   }
 }
+

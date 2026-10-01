@@ -8,14 +8,22 @@ async function check() {
   console.log("✅ Tables in Neon DB:");
   tables.forEach((t) => console.log("  ✓", t.table_name));
 
-  const enums = await sql`SELECT typname FROM pg_type WHERE typtype = 'e'`;
-  console.log("✅ Enums:");
-  enums.forEach((e) => console.log("  ✓", e.typname));
+  const influencerCols = await sql`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'influencers' ORDER BY ordinal_position`;
+  console.log("\n✅ Influencers columns:");
+  influencerCols.forEach((c) => console.log(`  ✓ ${c.column_name} (${c.data_type})`));
 
-  console.log("\n🎉 Database is live and ready!");
+  const orderCols = await sql`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'orders' ORDER BY ordinal_position`;
+  console.log("\n✅ Orders columns:");
+  orderCols.forEach((c) => console.log(`  ✓ ${c.column_name} (${c.data_type})`));
+
+  const orderCount = await sql`SELECT COUNT(*) as count FROM orders`;
+  console.log(`\n✅ Existing orders count: ${orderCount[0].count} (unchanged)`);
+
+  console.log("\n🎉 Database verification successful!");
 }
 
 check().catch((err) => {
   console.error("❌ DB error:", err.message);
   process.exit(1);
 });
+

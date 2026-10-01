@@ -5,6 +5,8 @@ import {
   updateOrderStatus,
   toggleKitchenStatus,
   toggleAutoReviewRequest,
+  loginAdminAction,
+  logoutAdminAction,
   OrderStatus,
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
@@ -23,6 +25,10 @@ import {
   Check,
   X,
   Star,
+  Lock,
+  LogOut,
+  KeyRound,
+  Loader2,
 } from "lucide-react";
 
 interface OrderItem {
@@ -56,6 +62,7 @@ interface OfferRecord {
 }
 
 interface AdminDashboardClientProps {
+  isAuthenticated: boolean;
   initialOrders: OrderRecord[];
   initialOffers: OfferRecord[];
   initialKitchenClosed?: boolean;
@@ -73,11 +80,16 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
 ];
 
 export default function AdminDashboardClient({
+  isAuthenticated: initialAuthStatus,
   initialOrders,
   initialOffers,
   initialKitchenClosed = false,
   initialAutoReviewRequest = true,
 }: AdminDashboardClientProps) {
+  const [authed, setAuthed] = useState<boolean>(initialAuthStatus);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   const [ordersList, setOrdersList] = useState<OrderRecord[]>(initialOrders);
   const [offersList, setOffersList] = useState<OfferRecord[]>(initialOffers);
   const [isKitchenClosed, setIsKitchenClosed] = useState<boolean>(initialKitchenClosed);
@@ -90,6 +102,94 @@ export default function AdminDashboardClient({
   const [offerSuccess, setOfferSuccess] = useState("");
 
   const [isPending, startTransition] = useTransition();
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+
+    startTransition(async () => {
+      const res = await loginAdminAction(passwordInput);
+      if (res.success) {
+        setAuthed(true);
+        window.location.reload();
+      } else {
+        setLoginError(res.error || "Invalid password");
+      }
+    });
+  };
+
+  const handleLogout = () => {
+    startTransition(async () => {
+      await logoutAdminAction();
+      setAuthed(false);
+      window.location.reload();
+    });
+  };
+
+  if (!authed) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-gray-200 p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 bg-brand-primary/10 text-brand-primary rounded-2xl flex items-center justify-center mx-auto">
+              <Lock size={28} />
+            </div>
+            <h1 className="font-display font-bold text-2xl text-brand-primary">
+              Daily Bap Admin Access
+            </h1>
+            <p className="text-xs text-gray-500">
+              Enter admin password to access kitchen management & settings.
+            </p>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-gray-700">
+                Admin Password
+              </label>
+              <div className="relative">
+                <input
+                  type="password"
+                  placeholder="Enter password..."
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-primary font-mono pr-10"
+                  autoFocus
+                />
+                <KeyRound className="w-4 h-4 text-gray-400 absolute right-3 top-3.5" />
+              </div>
+            </div>
+
+            {loginError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-1.5 font-medium">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isPending || !passwordInput}
+              className="w-full flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-accent disabled:bg-gray-200 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-md"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Authenticating…
+                </>
+              ) : (
+                "Unlock Dashboard"
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-[10px] text-gray-400">
+            Protected by server-side httpOnly session cookie & rate limiting.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Handle status update
   const handleStatusChange = (orderId: string, newStatus: OrderStatus) => {
@@ -214,6 +314,15 @@ export default function AdminDashboardClient({
             Kitchen Management Dashboard • Orders Queue & Daily Offers
           </p>
         </div>
+
+        <button
+          onClick={handleLogout}
+          disabled={isPending}
+          className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 rounded-xl transition border border-white/20 shrink-0 self-start sm:self-auto"
+        >
+          <LogOut size={14} />
+          <span>Logout</span>
+        </button>
       </div>
 
       <div className="max-w-7xl mx-auto space-y-8">

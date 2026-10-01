@@ -4,8 +4,13 @@ import { db } from "@/lib/db";
 import { orders, users } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { verifyAdminSession } from "@/lib/adminAuth";
 
 export async function GET() {
+  if (!(await verifyAdminSession())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const rawOrders = await db
       .select({
@@ -42,3 +47,4 @@ export async function GET() {
     );
   }
 }
+
