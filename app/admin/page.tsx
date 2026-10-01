@@ -13,14 +13,31 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const isAuthenticated = await checkAdminSessionAction();
-  const initialOrders = isAuthenticated ? await getAllOrders() : [];
-  const initialOffers = isAuthenticated ? await getOffers() : [];
-  const initialKitchenClosed = await getKitchenStatus();
-  const initialAutoReviewRequest = await getAutoReviewRequestStatus();
+
+  // If not authenticated, return immediately WITHOUT querying orders, offers, or settings
+  if (!isAuthenticated) {
+    return (
+      <AdminDashboardClient
+        isAuthenticated={false}
+        initialOrders={[]}
+        initialOffers={[]}
+        initialKitchenClosed={false}
+        initialAutoReviewRequest={true}
+      />
+    );
+  }
+
+  const [initialOrders, initialOffers, initialKitchenClosed, initialAutoReviewRequest] =
+    await Promise.all([
+      getAllOrders(),
+      getOffers(),
+      getKitchenStatus(),
+      getAutoReviewRequestStatus(),
+    ]);
 
   return (
     <AdminDashboardClient
-      isAuthenticated={isAuthenticated}
+      isAuthenticated={true}
       initialOrders={initialOrders}
       initialOffers={initialOffers}
       initialKitchenClosed={initialKitchenClosed}
@@ -28,5 +45,6 @@ export default async function AdminPage() {
     />
   );
 }
+
 
 
