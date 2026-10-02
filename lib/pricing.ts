@@ -131,21 +131,6 @@ export async function validateCouponCode(
     }
 
     const influencer = records[0];
-
-    // Anti-abuse check: Creator cannot use their own code
-    if (customerPhone && influencer.phoneOrUpi) {
-      const cleanCustomerPhone = customerPhone.replace(/\D/g, "").slice(-10);
-      const cleanInfluencerPhone = influencer.phoneOrUpi.replace(/\D/g, "").slice(-10);
-
-      if (cleanCustomerPhone && cleanCustomerPhone === cleanInfluencerPhone) {
-        return {
-          isValid: false,
-          error: "Creators cannot apply their own coupon code.",
-          influencer: null,
-        };
-      }
-    }
-
     return { isValid: true, influencer };
   } catch (error) {
     console.error("[validateCouponCode] Database lookup error:", error);
@@ -260,7 +245,6 @@ export async function calculateOrderTotals(
   let commissionAmount = 0;
   let appliedCouponCode: string | null = null;
   let appliedInfluencerId: string | null = null;
-  let couponError: string | undefined = undefined;
 
   if (couponCode && couponCode.trim()) {
     const couponRes = await validateCouponCode(
@@ -269,20 +253,35 @@ export async function calculateOrderTotals(
       customerPhone || "anonymous_ip"
     );
 
-    if (couponRes.isValid && couponRes.influencer) {
-      const inf = couponRes.influencer;
-      appliedCouponCode = inf.code;
-      appliedInfluencerId = inf.id;
-
-      // Discount applies to FOOD SUBTOTAL ONLY (Math.round applied in ONE place)
-      discountAmount = Math.round((rawFoodSubtotal * inf.discountPercent) / 100);
-
-      // Commission = commission_percent of discounted food subtotal
-      const discountedSubtotalTemp = Math.max(0, rawFoodSubtotal - discountAmount);
-      commissionAmount = Math.round((discountedSubtotalTemp * inf.commissionPercent) / 100);
-    } else {
-      couponError = couponRes.error || "Invalid or expired coupon code.";
+    if (!couponRes.isValid || !couponRes.influencer) {
+      return {
+        valid: false,
+        error: couponRes.error || "Invalid or expired coupon code.",
+        items: validatedItems,
+        subtotal: rawFoodSubtotal,
+        discountAmount: 0,
+        discountedSubtotal: rawFoodSubtotal,
+        deliveryFee: 0,
+        total: rawFoodSubtotal,
+        couponCode: null,
+        influencerId: null,
+        commissionAmount: 0,
+        distanceKm,
+        isDeliverable: true,
+        deliveryReason: "Invalid coupon code.",
+      };
     }
+
+    const inf = couponRes.influencer;
+    appliedCouponCode = inf.code;
+    appliedInfluencerId = inf.id;
+
+    // Discount applies to FOOD SUBTOTAL ONLY (Math.round applied in ONE place)
+    discountAmount = Math.round((rawFoodSubtotal * inf.discountPercent) / 100);
+
+    // Commission = commission_percent of discounted food subtotal
+    const discountedSubtotalTemp = Math.max(0, rawFoodSubtotal - discountAmount);
+    commissionAmount = Math.round((discountedSubtotalTemp * inf.commissionPercent) / 100);
   }
 
   const discountedSubtotal = Math.max(0, rawFoodSubtotal - discountAmount);
@@ -314,7 +313,6 @@ export async function calculateOrderTotals(
 
   return {
     valid: true,
-    error: couponError,
     items: validatedItems,
     subtotal: rawFoodSubtotal,
     discountAmount,
