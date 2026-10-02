@@ -305,6 +305,12 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
                     )}
                   </div>
                 ))}
+                {order.couponCode && order.discountAmount > 0 && (
+                  <div className="p-3.5 bg-emerald-50/70 flex items-center justify-between text-xs font-semibold text-emerald-700">
+                    <span>Discount ({order.couponCode})</span>
+                    <span>−₹{order.discountAmount}</span>
+                  </div>
+                )}
                 <div className="p-3.5 bg-gray-100/70 flex items-center justify-between text-xs font-semibold text-gray-600">
                   <span>Delivery Fee</span>
                   <span>

@@ -7,10 +7,37 @@ import { users, orders } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
 import { getKitchenStatus } from "@/app/actions/adminActions";
-import { calculateOrderTotals } from "@/lib/pricing";
+import { calculateOrderTotals, validateCouponCode } from "@/lib/pricing";
+import { getClientIp } from "@/lib/adminAuth";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
 import { eq, count } from "drizzle-orm";
 import type { CartItem, CustomerInfo } from "@/types";
+
+/**
+ * Server Action: Validate coupon code for frontend preview (rate limited per IP)
+ */
+export async function validateCouponAction(code: string) {
+  try {
+    const ip = await getClientIp();
+    const res = await validateCouponCode(code, null, ip);
+    if (res.isValid && res.influencer) {
+      return {
+        success: true,
+        code: res.influencer.code,
+        discountPercent: res.influencer.discountPercent,
+      };
+    }
+    return {
+      success: false,
+      error: res.error || "Invalid or expired coupon code.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: "Invalid or expired coupon code.",
+    };
+  }
+}
 
 interface PlaceOrderPayload {
   items: CartItem[];

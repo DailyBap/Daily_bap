@@ -1,5 +1,4 @@
-// store/useCartStore.ts — Zustand Global Cart Store
-
+// store/useCartStore.ts — Zustand Global Cart Store with Backward-Compatible Persistence
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { CartItem, CustomerInfo } from "@/types";
@@ -20,6 +19,10 @@ interface CartState {
   requestedDeliveryTime: string | null;
   deliverySlotLabel: string | null;
 
+  // Coupon state (Phase 3)
+  couponCode: string | null;
+  discountPercent: number;
+
   // Actions
   addItem: (item: Omit<CartItem, "quantity">) => void;
   removeItem: (id: string) => void;
@@ -28,9 +31,13 @@ interface CartState {
   setCustomerInfo: (info: Partial<CustomerInfo>) => void;
   setDeliverable: (value: boolean, distanceKm?: number | null) => void;
   setDeliverySlot: (time: Date | string | null, label: string | null) => void;
+  setCoupon: (code: string | null, discountPercent?: number) => void;
+  clearCoupon: () => void;
 
   // Computed (as functions to avoid stale state)
   getSubtotal: () => number;
+  getDiscountAmount: () => number;
+  getDiscountedSubtotal: () => number;
   getDeliveryFee: () => number;
   getTotal: () => number;
   getTotalItems: () => number;
@@ -45,6 +52,10 @@ export const useCartStore = create<CartState>()(
       distanceKm: null,
       requestedDeliveryTime: null,
       deliverySlotLabel: null,
+
+      // Default coupon state
+      couponCode: null,
+      discountPercent: 0,
 
       addItem: (newItem) =>
         set((state) => {
@@ -82,6 +93,8 @@ export const useCartStore = create<CartState>()(
           distanceKm: null,
           requestedDeliveryTime: null,
           deliverySlotLabel: null,
+          couponCode: null,
+          discountPercent: 0,
         }),
 
       setCustomerInfo: (info) =>
@@ -99,19 +112,45 @@ export const useCartStore = create<CartState>()(
           deliverySlotLabel: label,
         }),
 
+      setCoupon: (code, discountPercent = 10) =>
+        set({
+          couponCode: code ? code.toUpperCase() : null,
+          discountPercent: code ? discountPercent : 0,
+        }),
+
+      clearCoupon: () =>
+        set({
+          couponCode: null,
+          discountPercent: 0,
+        }),
+
       getSubtotal: () => {
         const { items } = get();
         return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       },
 
+      getDiscountAmount: () => {
+        const { couponCode, discountPercent } = get();
+        if (!couponCode || discountPercent <= 0) return 0;
+        const subtotal = get().getSubtotal();
+        return Math.round((subtotal * discountPercent) / 100);
+      },
+
+      getDiscountedSubtotal: () => {
+        const subtotal = get().getSubtotal();
+        const discount = get().getDiscountAmount();
+        return Math.max(0, subtotal - discount);
+      },
+
       getDeliveryFee: () => {
+        // Free delivery threshold (₹1,000) uses PRE-DISCOUNT food subtotal per spec
         const subtotal = get().getSubtotal();
         const { distanceKm } = get();
         return calculateDeliveryFee(distanceKm, subtotal).fee;
       },
 
       getTotal: () => {
-        return get().getSubtotal() + get().getDeliveryFee();
+        return get().getDiscountedSubtotal() + get().getDeliveryFee();
       },
 
       getTotalItems: () => {
@@ -121,12 +160,26 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "daily-bap-cart",
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        if (version < 2) {
+          // Upgrade version 1 cart state cleanly with default coupon fields
+          return {
+            ...persistedState,
+            couponCode: null,
+            discountPercent: 0,
+          };
+        }
+        return persistedState as CartState;
+      },
       partialize: (state) => ({
         items: state.items,
         customerInfo: state.customerInfo,
         distanceKm: state.distanceKm,
         requestedDeliveryTime: state.requestedDeliveryTime,
         deliverySlotLabel: state.deliverySlotLabel,
+        couponCode: state.couponCode,
+        discountPercent: state.discountPercent,
       }),
     }
   )

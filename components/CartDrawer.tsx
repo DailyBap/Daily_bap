@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { X, Trash2, Plus, Minus, ShoppingBag, MessageCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, Trash2, Plus, Minus, ShoppingBag, MessageCircle, Tag, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useCartStore } from "@/store/useCartStore";
 import { siteConfig } from "@/config/brand";
+import { validateCouponAction } from "@/app/actions/orderActions";
 import CheckoutForm from "./CheckoutForm";
-import { useState } from "react";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -13,13 +13,30 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
-  const { items, updateQuantity, removeItem, clearCart, getSubtotal, getDeliveryFee, getTotal } =
-    useCartStore();
+  const {
+    items,
+    updateQuantity,
+    removeItem,
+    clearCart,
+    getSubtotal,
+    getDiscountAmount,
+    getDiscountedSubtotal,
+    getDeliveryFee,
+    getTotal,
+    couponCode,
+    discountPercent,
+    setCoupon,
+    clearCoupon,
+  } = useCartStore();
 
   const [showCheckout, setShowCheckout] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponError, setCouponError] = useState("");
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
   const subtotal = getSubtotal();
+  const discountAmount = getDiscountAmount();
   const deliveryFee = getDeliveryFee();
   const total = getTotal();
 
@@ -36,8 +53,33 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   useEffect(() => {
     if (isOpen) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
+
+  const handleApplyCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!couponInput.trim()) return;
+
+    setIsValidatingCoupon(true);
+    setCouponError("");
+
+    try {
+      const res = await validateCouponAction(couponInput.trim());
+      if (res.success && res.code) {
+        setCoupon(res.code, res.discountPercent);
+        setCouponInput("");
+        setCouponError("");
+      } else {
+        setCouponError(res.error || "Invalid or expired coupon code.");
+      }
+    } catch {
+      setCouponError("Invalid or expired coupon code.");
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
 
   return (
     <>
@@ -164,23 +206,93 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 <Trash2 size={12} /> Clear cart
               </button>
 
+              {/* Creator Code Input Section */}
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
+                <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                  <Tag size={14} className="text-brand-accent" /> Have a creator code?
+                </p>
+
+                {couponCode ? (
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle size={16} className="text-emerald-600" />
+                      <div>
+                        <span className="font-bold text-xs text-emerald-900 font-mono">
+                          {couponCode}
+                        </span>
+                        <span className="text-[11px] text-emerald-700 ml-1.5 font-medium">
+                          ({discountPercent}% OFF applied)
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={clearCoupon}
+                      className="text-xs font-semibold text-rose-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleApplyCoupon} className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="ENTER CODE"
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          if (couponError) setCouponError("");
+                        }}
+                        className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono uppercase tracking-wider outline-none focus:border-brand-accent"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isValidatingCoupon || !couponInput.trim()}
+                        className="bg-brand-primary hover:bg-brand-accent disabled:opacity-50 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1"
+                      >
+                        {isValidatingCoupon ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          "Apply"
+                        )}
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p className="text-xs text-rose-600 flex items-center gap-1 font-medium">
+                        <AlertCircle size={12} /> {couponError}
+                      </p>
+                    )}
+                  </form>
+                )}
+              </div>
+
               {/* Totals */}
               <div className="bg-gray-50 rounded-2xl p-5 space-y-2.5 border border-gray-100">
                 <div className="flex justify-between text-sm text-gray-600">
-                  <span>Subtotal</span>
+                  <span>Food Subtotal</span>
                   <span className="font-medium">₹{subtotal}</span>
                 </div>
+
+                {couponCode && discountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                    <span>Discount ({couponCode})</span>
+                    <span>−₹{discountAmount}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between text-sm text-gray-600">
                   <span>Delivery</span>
                   <span className={`font-medium ${deliveryFee === 0 ? "text-green-600" : ""}`}>
                     {deliveryFee === 0 ? "FREE 🎉" : `₹${deliveryFee}`}
                   </span>
                 </div>
+
                 {deliveryFee > 0 && (
                   <p className="text-[11px] text-gray-400">
                     Add ₹{1000 - subtotal} more for free delivery
                   </p>
                 )}
+
                 <div className="border-t border-gray-200 pt-2.5 flex justify-between font-bold text-brand-primary">
                   <span>Total</span>
                   <span className="text-lg font-display">₹{total}</span>
