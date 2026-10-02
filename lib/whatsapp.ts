@@ -5,9 +5,6 @@ import type { CartItem, CustomerInfo } from "@/types";
 const WHATSAPP_NUMBER =
   process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "919999999999";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL || "https://daily-bap.vercel.app";
-
 /**
  * Formats the cart into a human-readable WhatsApp message
  * and returns a deep-link URL that opens the WA chat with
@@ -20,7 +17,9 @@ export function generateWhatsAppLink(
   deliveryFee: number,
   deliverySlotLabel?: string | null,
   orderId?: string | null,
-  orderNumber?: string | null
+  orderNumber?: string | null,
+  couponCode?: string | null,
+  discountAmount?: number
 ): string {
   const total = subtotal + deliveryFee;
 
@@ -32,9 +31,16 @@ export function generateWhatsAppLink(
     )
     .join("\n");
 
+  const rawSubtotal = subtotal + (discountAmount || 0);
+
+  const discountLine =
+    couponCode && discountAmount && discountAmount > 0
+      ? `\n  🎟️ Discount (${couponCode}): −₹${discountAmount}`
+      : "";
+
   const deliveryLine =
     deliveryFee === 0
-      ? subtotal >= 1000
+      ? rawSubtotal >= 1000
         ? "  🎉 Delivery: FREE (order above ₹1000)"
         : "  🎉 Delivery: FREE (within 3km zone)"
       : `  🛵 Delivery: ₹${deliveryFee}`;
@@ -56,7 +62,7 @@ ${orderHeader}━━━━━━━━━━━━━━━━━━━━━━
 ${itemLines}
 
 ━━━━━━━━━━━━━━━━━━━━━━━
-  Subtotal: ₹${subtotal}
+  Subtotal: ₹${rawSubtotal}${discountLine}
 ${deliveryLine}
   *TOTAL: ₹${total}*
 ${timeSlotLine}

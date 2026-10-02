@@ -73,6 +73,7 @@ export default function CheckoutForm() {
           customer: customerInfo,
           subtotal: getSubtotal(),
           deliveryFee: getDeliveryFee(),
+          couponCode: useCartStore.getState().couponCode,
           requestedDeliveryTime,
           deliverySlotLabel,
           orderNumber,

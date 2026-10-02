@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { verifyAdminPin, updateOrderStatus } from "@/app/actions/adminActions";
+import { loginAdminAction, checkAdminSessionAction, updateOrderStatus } from "@/app/actions/adminActions";
 import { Clock, Phone, MapPin, CheckCircle, Lock, RefreshCw, Star } from "lucide-react";
 import { siteConfig } from "@/config/brand";
 
@@ -42,15 +42,24 @@ export default function AdminOrdersPage() {
   const [ordersList, setOrdersList] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    checkAdminSessionAction().then((isAuthed) => {
+      if (isAuthed) {
+        setIsAuthenticated(true);
+        fetchOrders();
+      }
+    });
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isValid = await verifyAdminPin(pinInput);
-    if (isValid) {
+    const res = await loginAdminAction(pinInput);
+    if (res.success) {
       setIsAuthenticated(true);
       setPinError("");
       fetchOrders();
     } else {
-      setPinError("Invalid Admin PIN. Try default (1234)");
+      setPinError(res.error || "Invalid Password");
     }
   };
 

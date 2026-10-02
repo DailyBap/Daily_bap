@@ -14,11 +14,12 @@ import {
   KITCHEN_COORDS,
   MAX_DELIVERY_RADIUS_KM,
   FREE_DELIVERY_RADIUS_KM,
-  calculateDeliveryFee,
 } from "@/lib/geo";
 import { db } from "@/lib/db";
 import { users, orders, chatSessions } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
+import { calculateOrderTotals } from "@/lib/pricing";
+import { getKitchenStatus } from "@/app/actions/adminActions";
 import { eq } from "drizzle-orm";
 import type { CartItem, CustomerInfo } from "@/types";
 
@@ -114,14 +115,15 @@ YOUR PERSONA & CONVERSATION RULES:
 3. SINGLE SOURCE OF TRUTH: Rely ONLY on the menu items, prices, descriptions, and principles provided below from our brand configuration. Never hallucinate fake items or wrong prices.
 4. 100% PRE-ORDER MODEL: We cook every single meal fresh specifically for the order (zero food waste, maximum freshness).
 5. DELIVERY CHECK FLOW: When the customer mentions their location, area, or coordinates in Guwahati, use the checkDeliveryZone tool. Remind them delivery is FREE within 3km, flat ₹50 for 3-10km, or FREE on orders ₹1000+.
-6. ORDERING & FINALIZATION:
+6. CREATOR COUPONS: If a customer mentions a creator discount code, pass it in the couponCode parameter of createOrderRecord.
+7. ORDERING & FINALIZATION:
    To place an order, make sure you have:
    - Customer Full Name
    - 10-digit Indian Phone Number (e.g. 9876543210)
    - Complete Delivery Address in Guwahati
    - Selected items with quantities
    - Preferred 30-minute Delivery Time Slot (e.g. "Today, 7:30–8:00 PM" or "ASAP (~75 mins)"). Orders placed today require at least 75 minutes total lead time (45 mins fresh prep + 30 mins delivery) between 11:00 AM and 10:00 PM.
-   Confirm their order summary, delivery slot, and total with them, call the createOrderRecord tool, and celebrate their order with the WhatsApp finalization link!
+   Confirm their details, call createOrderRecord (passing ONLY item IDs, quantities, address, slot, and optional coupon code—never prices), tell them the server-calculated total, and share the WhatsApp finalization link!
 
 ${brandKnowledge}
 `.trim();
@@ -175,7 +177,7 @@ export async function POST(req: Request) {
 
         createOrderRecord: tool({
           description:
-            "Save a confirmed customer order to the database and generate a WhatsApp checkout link.",
+            "Save a confirmed customer order to the database and generate a WhatsApp checkout link. Prices and totals are calculated strictly on the server.",
           parameters: z.object({
             customerName: z.string().describe("Customer full name"),
             customerPhone: z
@@ -184,46 +186,78 @@ export async function POST(req: Request) {
             deliveryAddress: z
               .string()
               .describe("Full delivery address in Guwahati"),
+            lat: z
+              .number()
+              .optional()
+              .describe("Optional latitude of customer delivery location"),
+            lng: z
+              .number()
+              .optional()
+              .describe("Optional longitude of customer delivery location"),
             deliverySlotLabel: z
               .string()
               .optional()
               .describe("Requested delivery slot e.g. Today, 7:30–8:00 PM or ASAP"),
+            couponCode: z
+              .string()
+              .optional()
+              .describe("Optional creator coupon code provided by customer"),
             items: z
               .array(
                 z.object({
                   id: z.string().describe("Menu item ID"),
-                  name: z.string().describe("Menu item name"),
-                  price: z.number().describe("Price per unit in ₹"),
-                  quantity: z.number().int().min(1).describe("Quantity"),
+                  quantity: z.number().int().min(1).max(50).describe("Quantity"),
                 })
               )
               .min(1)
-              .describe("List of items to order"),
+              .describe("List of menu item IDs and quantities to order"),
           }),
           execute: async ({
             customerName,
             customerPhone,
             deliveryAddress,
+            lat,
+            lng,
             deliverySlotLabel,
+            couponCode,
             items,
           }) => {
             try {
-              const subtotal = items.reduce(
-                (sum, item) => sum + item.price * item.quantity,
-                0
-              );
+              const slotLabel = deliverySlotLabel || "ASAP (Today, ~75 mins)";
 
-              // Calculate delivery fee using shared tier calculator
-              const feeResult = calculateDeliveryFee(null, subtotal);
-              const deliveryFee = feeResult.fee;
-              const total = subtotal + deliveryFee;
+              // 1. Holiday Mode Check
+              if (slotLabel.startsWith("Today") || slotLabel.startsWith("ASAP")) {
+                const isKitchenClosed = await getKitchenStatus();
+                if (isKitchenClosed) {
+                  return {
+                    success: false,
+                    error: "Kitchen is currently closed for holidays. Please select a delivery slot for tomorrow.",
+                  };
+                }
+              }
+
+              // 2. Server-Authoritative Pricing, Discount, Commission & Delivery Fee Calculation
+              const pricingRes = await calculateOrderTotals({
+                items,
+                lat: lat ?? null,
+                lng: lng ?? null,
+                couponCode,
+                customerPhone,
+              });
+
+              if (!pricingRes.valid) {
+                return {
+                  success: false,
+                  error: pricingRes.error || "Failed to calculate order totals.",
+                };
+              }
 
               const cleanPhone = customerPhone.replace(/\D/g, "");
-
-              const slotLabel = deliverySlotLabel || "ASAP (Today, ~75 mins)";
               const reqTime = new Date(Date.now() + 75 * 60 * 1000);
+              const orderNumber =
+                "BAP-" + Math.random().toString(36).substring(2, 6).toUpperCase();
 
-              // 1. Find or create user in DB
+              // 3. Find or create user in DB
               let userId: string;
               const existingUsers = await db
                 .select()
@@ -245,47 +279,47 @@ export async function POST(req: Request) {
                 userId = newUser.id;
               }
 
-              // 2. Insert order record
-              const cartItems: CartItem[] = items.map((i) => ({
-                id: i.id,
-                name: i.name,
-                price: i.price,
-                quantity: i.quantity,
-                modelRef: null,
-              }));
-
+              // 4. Insert order record with server-validated prices, coupon & commission snapshots
               const [newOrder] = await db
                 .insert(orders)
                 .values({
                   userId,
-                  items: cartItems as unknown as Record<string, unknown>[],
-                  totalAmount: total,
-                  deliveryFee,
+                  orderNumber,
+                  items: pricingRes.items as unknown as Record<string, unknown>[],
+                  totalAmount: pricingRes.total,
+                  deliveryFee: pricingRes.deliveryFee,
                   deliveryAddress,
                   requestedDeliveryTime: reqTime,
                   deliverySlotLabel: slotLabel,
-                  status: "pending",
-                  whatsappSent: "pending_wa_click",
+                  couponCode: pricingRes.couponCode,
+                  influencerId: pricingRes.influencerId,
+                  discountAmount: pricingRes.discountAmount,
+                  commissionAmount: pricingRes.commissionAmount,
+                  status: "draft",
+                  whatsappSent: "yes",
                 })
                 .returning({ id: orders.id });
 
-              // 3. Generate WhatsApp checkout deep link
+              // 5. Generate WhatsApp checkout deep link
               const customer: CustomerInfo = {
                 name: customerName,
                 phone: cleanPhone,
                 address: deliveryAddress,
+                lat: lat ?? undefined,
+                lng: lng ?? undefined,
               };
 
               const whatsappUrl = generateWhatsAppLink(
-                cartItems,
+                pricingRes.items as CartItem[],
                 customer,
-                subtotal,
-                deliveryFee,
+                pricingRes.discountedSubtotal,
+                pricingRes.deliveryFee,
                 slotLabel,
-                newOrder?.id
+                newOrder.id,
+                orderNumber
               );
 
-              // 4. Optionally record session memory if provided
+              // 6. Record chat session memory
               if (sessionId || cleanPhone) {
                 try {
                   await db.insert(chatSessions).values({
@@ -299,14 +333,18 @@ export async function POST(req: Request) {
 
               return {
                 success: true,
-                orderId: newOrder?.id || "ORDER-CREATED",
-                subtotal,
-                deliveryFee,
-                total,
-                itemsCount: items.length,
+                orderId: newOrder.id,
+                orderNumber,
+                subtotal: pricingRes.subtotal,
+                discountAmount: pricingRes.discountAmount,
+                discountedSubtotal: pricingRes.discountedSubtotal,
+                deliveryFee: pricingRes.deliveryFee,
+                total: pricingRes.total,
+                couponCode: pricingRes.couponCode,
+                commissionAmount: pricingRes.commissionAmount,
+                itemsCount: pricingRes.items.length,
                 whatsappUrl,
-                message:
-                  "Order saved successfully! Click the WhatsApp button to confirm your order with our kitchen.",
+                message: `Order saved successfully! Total payable is ₹${pricingRes.total}. Click the WhatsApp link to confirm your order.`,
               };
             } catch (err: unknown) {
               const errMsg =
