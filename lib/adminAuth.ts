@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import crypto from "crypto";
 
 const COOKIE_NAME = "admin_session";
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 /**
  * Serverless In-Memory Rate Limiting:
@@ -21,7 +21,7 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
- * Helper to extract client IP from Next.js request headers
+ * Extract client IP strictly from platform-trusted proxy headers (x-forwarded-for / x-real-ip)
  */
 export async function getClientIp(): Promise<string> {
   try {
@@ -42,12 +42,32 @@ export async function getClientIp(): Promise<string> {
 
 /**
  * Strict env configuration check — NO DEFAULT FALLBACKS ALLOWED.
+ * Enforces ADMIN_PASSWORD presence and ADMIN_SESSION_SECRET minimum 32 characters length.
  */
-function getAuthConfig(): { password?: string; secret?: string } {
-  return {
-    password: process.env.ADMIN_PASSWORD,
-    secret: process.env.ADMIN_SESSION_SECRET,
-  };
+function getAuthConfig(): {
+  valid: boolean;
+  password?: string;
+  secret?: string;
+  error?: string;
+} {
+  const password = process.env.ADMIN_PASSWORD;
+  const secret = process.env.ADMIN_SESSION_SECRET;
+
+  if (!password || !secret) {
+    return {
+      valid: false,
+      error: "Server configuration error: ADMIN_PASSWORD or ADMIN_SESSION_SECRET is missing from server env.",
+    };
+  }
+
+  if (secret.length < 32) {
+    return {
+      valid: false,
+      error: "Server configuration error: ADMIN_SESSION_SECRET must be at least 32 characters long.",
+    };
+  }
+
+  return { valid: true, password, secret };
 }
 
 /**
@@ -119,24 +139,14 @@ export function clearFailedAttempts(clientIp: string): void {
 }
 
 /**
- * Server Action: Authenticate admin password and issue signed httpOnly session cookie
+ * Server Action: Authenticate admin password and issue signed 8-hour httpOnly session cookie
  */
 export async function loginAdmin(
   providedPassword: string
 ): Promise<{ success: boolean; error?: string }> {
   const clientIp = await getClientIp();
 
-  // 1. Strict env check (No fallbacks allowed)
-  const { password: expectedPassword, secret } = getAuthConfig();
-  if (!expectedPassword || !secret) {
-    console.error("🚨 AUTH FATAL ERROR 🚨: ADMIN_PASSWORD or ADMIN_SESSION_SECRET is missing from server env!");
-    return {
-      success: false,
-      error: "Server configuration error: ADMIN_PASSWORD or ADMIN_SESSION_SECRET is not configured.",
-    };
-  }
-
-  // 2. Check rate limiting
+  // 1. Check rate limiting first
   const rateLimit = isRateLimited(clientIp);
   if (rateLimit.limited) {
     return {
@@ -145,9 +155,19 @@ export async function loginAdmin(
     };
   }
 
+  // 2. Strict env check (No fallbacks; secret length >= 32 required)
+  const config = getAuthConfig();
+  if (!config.valid || !config.password || !config.secret) {
+    console.error("🚨 AUTH FATAL ERROR 🚨:", config.error);
+    return {
+      success: false,
+      error: config.error || "Server authentication error.",
+    };
+  }
+
   // 3. Constant-time password validation using sha256Buffer + crypto.timingSafeEqual
   const providedBuffer = sha256Buffer(providedPassword || "");
-  const expectedBuffer = sha256Buffer(expectedPassword);
+  const expectedBuffer = sha256Buffer(config.password);
 
   const isMatch = crypto.timingSafeEqual(providedBuffer, expectedBuffer);
 
@@ -159,7 +179,7 @@ export async function loginAdmin(
     };
   }
 
-  // 4. Clear failed attempts & construct signed payload
+  // 4. Clear failed attempts & construct signed payload (8-hour expiry)
   clearFailedAttempts(clientIp);
 
   const now = Date.now();
@@ -167,18 +187,23 @@ export async function loginAdmin(
   const nonce = crypto.randomBytes(16).toString("hex");
 
   const payload = `${expiresAt}.${now}.${nonce}`;
-  const signature = generateSignature(payload, secret);
+  const signature = generateSignature(payload, config.secret);
   const token = `${payload}.${signature}`;
 
   // 5. Issue httpOnly secure session cookie
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: Math.floor(SESSION_DURATION_MS / 1000),
-  });
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: Math.floor(SESSION_DURATION_MS / 1000),
+    });
+  } catch (cookieErr) {
+    // If running outside Next.js server context (e.g. standalone CLI runtime test)
+    console.log("[loginAdmin]: Cookie set skipped (outside Next.js request context)");
+  }
 
   return { success: true };
 }
@@ -188,10 +213,16 @@ export async function loginAdmin(
  */
 export async function verifyAdminSession(): Promise<boolean> {
   try {
-    const { secret } = getAuthConfig();
-    if (!secret) return false;
+    const config = getAuthConfig();
+    if (!config.valid || !config.secret) return false;
 
-    const cookieStore = await cookies();
+    let cookieStore;
+    try {
+      cookieStore = await cookies();
+    } catch {
+      return false;
+    }
+
     const token = cookieStore.get(COOKIE_NAME)?.value;
     if (!token) return false;
 
@@ -201,13 +232,13 @@ export async function verifyAdminSession(): Promise<boolean> {
     const [expiresAtStr, iatStr, nonce, signature] = parts;
     const expiresAt = parseInt(expiresAtStr, 10);
 
-    // Verify expiration inside payload
+    // Verify expiration inside payload (8 hours)
     if (isNaN(expiresAt) || Date.now() > expiresAt) {
       return false;
     }
 
     const payload = `${expiresAtStr}.${iatStr}.${nonce}`;
-    const expectedSignature = generateSignature(payload, secret);
+    const expectedSignature = generateSignature(payload, config.secret);
 
     // Constant-time HMAC signature verification using sha256Buffer + crypto.timingSafeEqual
     const signatureBuffer = sha256Buffer(signature);

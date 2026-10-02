@@ -7,12 +7,7 @@ import { users, orders } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
 import { getKitchenStatus } from "@/app/actions/adminActions";
-import {
-  calculateDeliveryFee,
-  haversineDistance,
-  KITCHEN_COORDS,
-  MAX_DELIVERY_RADIUS_KM,
-} from "@/lib/geo";
+import { calculateOrderTotals } from "@/lib/pricing";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
 import { eq, count } from "drizzle-orm";
 import type { CartItem, CustomerInfo } from "@/types";
@@ -22,6 +17,7 @@ interface PlaceOrderPayload {
   customer: CustomerInfo;
   subtotal: number;
   deliveryFee: number;
+  couponCode?: string | null;
   requestedDeliveryTime?: string | Date | null;
   deliverySlotLabel?: string | null;
   orderNumber?: string | null;
@@ -57,9 +53,9 @@ export async function getSlotCapacities(): Promise<Record<string, number>> {
 /**
  * Server Action: Save the order to Neon DB and return WhatsApp deep link.
  * 1. Validate requested delivery slot server-side
- * 2. Recalculate distance and delivery fee server-side (never trust client fee)
+ * 2. Calculate authoritative order totals, distance, discounts, and fees using lib/pricing.ts
  * 3. Upsert user by phone number
- * 4. Insert order record (status: pending, with orderNumber)
+ * 4. Insert order record (status: draft, with orderNumber, coupon & commission snapshots)
  * 5. Generate WhatsApp deep-link with order tracking link & slot label
  */
 export async function placeOrder(
@@ -69,7 +65,7 @@ export async function placeOrder(
     const {
       items,
       customer,
-      subtotal,
+      couponCode,
       requestedDeliveryTime,
       deliverySlotLabel,
     } = payload;
@@ -109,27 +105,21 @@ export async function placeOrder(
     const parsedDate = new Date(requestedDeliveryTime);
     const timeDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
 
-    // 2. Server-side distance & delivery fee calculation
-    let distanceKm: number | null = null;
-    if (customer.lat != null && customer.lng != null) {
-      distanceKm = haversineDistance(
-        KITCHEN_COORDS.lat,
-        KITCHEN_COORDS.lng,
-        customer.lat,
-        customer.lng
-      );
+    // 2. Authoritative server-side pricing, distance, coupon discount, and fee calculation
+    const pricingRes = await calculateOrderTotals({
+      items,
+      lat: customer.lat,
+      lng: customer.lng,
+      couponCode,
+      customerPhone: customer.phone,
+    });
 
-      if (distanceKm > MAX_DELIVERY_RADIUS_KM) {
-        return {
-          success: false,
-          error: `Your location is ${Math.round(distanceKm * 10) / 10}km away, which exceeds our maximum ${MAX_DELIVERY_RADIUS_KM}km delivery radius.`,
-        };
-      }
+    if (!pricingRes.valid) {
+      return {
+        success: false,
+        error: pricingRes.error || "Failed to calculate order totals.",
+      };
     }
-
-    const feeResult = calculateDeliveryFee(distanceKm, subtotal);
-    const validatedDeliveryFee = feeResult.fee;
-    const total = subtotal + validatedDeliveryFee;
 
     // 3. Find or create user
     let userId: string;
@@ -155,29 +145,33 @@ export async function placeOrder(
       userId = newUser.id;
     }
 
-    // 4. Insert order record
+    // 4. Insert order record with coupon & commission snapshots
     const [newOrder] = await db
       .insert(orders)
       .values({
         userId,
         orderNumber,
-        items: items as unknown as Record<string, unknown>[],
-        totalAmount: total,
-        deliveryFee: validatedDeliveryFee,
+        items: pricingRes.items as unknown as Record<string, unknown>[],
+        totalAmount: pricingRes.total,
+        deliveryFee: pricingRes.deliveryFee,
         deliveryAddress: customer.address,
         requestedDeliveryTime: timeDate,
         deliverySlotLabel,
+        couponCode: pricingRes.couponCode,
+        influencerId: pricingRes.influencerId,
+        discountAmount: pricingRes.discountAmount,
+        commissionAmount: pricingRes.commissionAmount,
         status: "draft",
         whatsappSent: "yes",
       })
       .returning({ id: orders.id });
 
-    // 5. Generate WhatsApp deep-link
+    // 5. Generate WhatsApp deep-link using server-validated prices
     const whatsappUrl = generateWhatsAppLink(
-      items,
+      pricingRes.items as CartItem[],
       customer,
-      subtotal,
-      validatedDeliveryFee,
+      pricingRes.discountedSubtotal,
+      pricingRes.deliveryFee,
       deliverySlotLabel,
       newOrder.id,
       orderNumber
@@ -191,3 +185,4 @@ export async function placeOrder(
     return { success: false, error: msg };
   }
 }
+
