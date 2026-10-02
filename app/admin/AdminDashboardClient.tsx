@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import {
   updateOrderStatus,
   toggleKitchenStatus,
@@ -23,6 +23,10 @@ import {
   getSalesStatsAction,
   SalesReportStats,
 } from "@/app/actions/salesActions";
+import {
+  importInfluencersAction,
+  ImportResult,
+} from "@/app/actions/influencerImportActions";
 import {
   ShoppingBag,
   Tag,
@@ -53,6 +57,10 @@ import {
   UserX,
   CreditCard,
   Percent,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  FileWarning,
 } from "lucide-react";
 
 interface OrderItem {
@@ -165,6 +173,13 @@ export default function AdminDashboardClient({
   const [payoutModalCreator, setPayoutModalCreator] = useState<InfluencerWithStats | null>(null);
   const [payoutMonth, setPayoutMonth] = useState<string>(currentMonthStr);
   const [payoutError, setPayoutError] = useState("");
+
+  // Import Modal State
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   // New offer form state
   const [newTitle, setNewTitle] = useState("");
@@ -965,7 +980,7 @@ export default function AdminDashboardClient({
         {/* TAB 2: CREATOR COUPONS */}
         {activeTab === "creators" && (
           <div className="space-y-6">
-            {/* Header & Add Creator Trigger */}
+            {/* Header, Export & Import buttons */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs">
               <div>
                 <h2 className="font-display font-bold text-xl text-gray-900 flex items-center gap-2">
@@ -977,13 +992,35 @@ export default function AdminDashboardClient({
                 </p>
               </div>
 
-              <button
-                onClick={() => setIsAddCreatorOpen(true)}
-                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-5 py-3 rounded-2xl transition shadow-md self-start sm:self-auto shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                Add New Creator
-              </button>
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                {/* Export to Excel */}
+                <a
+                  href="/api/admin/export/creators"
+                  download
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition shadow-md"
+                >
+                  <Download className="w-4 h-4" />
+                  Export .xlsx
+                </a>
+
+                {/* Import from Excel/CSV */}
+                <button
+                  onClick={() => { setImportResult(null); setImportFile(null); setIsImportOpen(true); }}
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition shadow-md"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import .xlsx / .csv
+                </button>
+
+                {/* Add New Creator */}
+                <button
+                  onClick={() => setIsAddCreatorOpen(true)}
+                  className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition shadow-md"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add New Creator
+                </button>
+              </div>
             </div>
 
             {/* Creators Grid / List */}
@@ -1882,6 +1919,196 @@ export default function AdminDashboardClient({
           </div>
         </div>
       )}
+
+      {/* MODAL 4: IMPORT CREATORS (.xlsx / .csv) */}
+      {isImportOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white max-w-xl w-full rounded-3xl p-6 space-y-5 border border-gray-200 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <h3 className="font-display font-bold text-lg text-gray-900 flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
+                Import Creators (.xlsx / .csv)
+              </h3>
+              <button
+                onClick={() => setIsImportOpen(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* File format guide */}
+            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-xs text-indigo-900 space-y-1">
+              <p className="font-bold text-sm flex items-center gap-1.5">
+                <FileSpreadsheet className="w-4 h-4" />
+                Expected Column Headers (Row 1)
+              </p>
+              <p className="font-mono text-[11px] bg-white border border-indigo-200 px-2 py-1.5 rounded-lg">
+                name | code | instagramHandle | phoneOrUpi | discountPercent | commissionPercent | notes
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-indigo-700 pt-1">
+                <li><strong>name</strong> and <strong>code</strong> are required.</li>
+                <li>Existing codes are skipped — creators are <strong>never deleted</strong>.</li>
+                <li>Duplicate codes within the file are rejected with per-row errors.</li>
+                <li>Formula injection (=, +, -, @) is automatically neutralized.</li>
+              </ul>
+            </div>
+
+            {/* File picker */}
+            {!importResult ? (
+              <div className="space-y-4">
+                <div
+                  onClick={() => importFileRef.current?.click()}
+                  className="border-2 border-dashed border-indigo-300 rounded-2xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/50 transition space-y-2"
+                >
+                  <Upload className="w-8 h-8 mx-auto text-indigo-400" />
+                  <p className="font-bold text-sm text-indigo-700">
+                    {importFile ? importFile.name : "Click to choose a file"}
+                  </p>
+                  <p className="text-xs text-gray-400">Supports .xlsx and .csv files</p>
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept=".xlsx,.csv"
+                    className="hidden"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+
+                {importFile && (
+                  <div className="flex items-center gap-2 text-xs bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+                    <FileSpreadsheet className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span className="font-bold text-indigo-800 truncate">{importFile.name}</span>
+                    <span className="text-gray-500 ml-auto shrink-0">
+                      {(importFile.size / 1024).toFixed(1)} KB
+                    </span>
+                    <button
+                      onClick={() => { setImportFile(null); if (importFileRef.current) importFileRef.current.value = ""; }}
+                      className="text-gray-400 hover:text-red-500 transition shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsImportOpen(false)}
+                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!importFile || isImporting}
+                    onClick={async () => {
+                      if (!importFile) return;
+                      setIsImporting(true);
+                      const fd = new FormData();
+                      fd.append("file", importFile);
+                      const result = await importInfluencersAction(fd);
+                      setImportResult(result);
+                      setIsImporting(false);
+                      if (result.importedCount > 0) {
+                        refreshInfluencers();
+                      }
+                    }}
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 text-white font-bold text-xs rounded-xl transition shadow-md flex items-center justify-center gap-1.5"
+                  >
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Importing…
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" /> Import Creators
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Import Results */
+              <div className="space-y-4">
+                {importResult.error ? (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                    <span className="font-medium">{importResult.error}</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Summary KPIs */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-gray-50 rounded-2xl p-3 text-center border border-gray-200">
+                        <p className="text-xl font-bold text-gray-900">{importResult.totalRows}</p>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase">Total Rows</p>
+                      </div>
+                      <div className="bg-emerald-50 rounded-2xl p-3 text-center border border-emerald-200">
+                        <p className="text-xl font-bold text-emerald-700">{importResult.importedCount}</p>
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase">Imported</p>
+                      </div>
+                      <div className={`rounded-2xl p-3 text-center border ${importResult.errorCount > 0 ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"}`}>
+                        <p className={`text-xl font-bold ${importResult.errorCount > 0 ? "text-amber-700" : "text-gray-400"}`}>{importResult.errorCount}</p>
+                        <p className={`text-[10px] font-bold uppercase ${importResult.errorCount > 0 ? "text-amber-600" : "text-gray-400"}`}>Skipped / Errors</p>
+                      </div>
+                    </div>
+
+                    {/* Success banner */}
+                    {importResult.importedCount > 0 && (
+                      <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-medium">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>
+                          Successfully imported {importResult.importedCount} creator{importResult.importedCount !== 1 ? "s" : ""}.
+                          The Creators tab has been refreshed.
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Per-row errors */}
+                    {importResult.errors.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="font-bold text-xs text-gray-700 flex items-center gap-1.5">
+                          <FileWarning className="w-4 h-4 text-amber-600" />
+                          Skipped Rows ({importResult.errors.length})
+                        </p>
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 border border-amber-200 rounded-2xl p-3 bg-amber-50/50">
+                          {importResult.errors.map((err, i) => (
+                            <div key={i} className="flex items-start gap-2 text-xs">
+                              <span className="font-mono font-bold text-gray-500 shrink-0">Row {err.rowNumber}</span>
+                              <span className="font-bold text-amber-800 shrink-0">[{err.code}]</span>
+                              <span className="text-amber-700">{err.error}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Done / Import another */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsImportOpen(false)}
+                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setImportResult(null); setImportFile(null); if (importFileRef.current) importFileRef.current.value = ""; }}
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition shadow-md flex items-center justify-center gap-1.5"
+                  >
+                    <Upload className="w-4 h-4" /> Import Another File
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
