@@ -7,6 +7,8 @@ import {
   checkAdminSessionAction,
 } from "@/app/actions/adminActions";
 import { getOffers } from "@/app/actions/offerActions";
+import { getInfluencersAction } from "@/app/actions/influencerActions";
+import { getSalesStatsAction } from "@/app/actions/salesActions";
 import AdminDashboardClient from "./AdminDashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -21,25 +23,37 @@ export default async function AdminPage() {
         isAuthenticated={false}
         initialOrders={[]}
         initialOffers={[]}
+        initialInfluencers={[]}
+        initialSalesStats={null}
         initialKitchenClosed={false}
         initialAutoReviewRequest={true}
       />
     );
   }
 
-  const [initialOrders, initialOffers, initialKitchenClosed, initialAutoReviewRequest] =
-    await Promise.all([
-      getAllOrders(),
-      getOffers(),
-      getKitchenStatus(),
-      getAutoReviewRequestStatus(),
-    ]);
+  const [
+    initialOrders,
+    initialOffers,
+    initialKitchenClosed,
+    initialAutoReviewRequest,
+    initialInfluencers,
+    initialSalesStats,
+  ] = await Promise.all([
+    getAllOrders(),
+    getOffers(),
+    getKitchenStatus(),
+    getAutoReviewRequestStatus(),
+    getInfluencersAction(),
+    getSalesStatsAction(),
+  ]);
 
   return (
     <AdminDashboardClient
       isAuthenticated={true}
       initialOrders={initialOrders}
       initialOffers={initialOffers}
+      initialInfluencers={initialInfluencers}
+      initialSalesStats={initialSalesStats}
       initialKitchenClosed={initialKitchenClosed}
       initialAutoReviewRequest={initialAutoReviewRequest}
     />

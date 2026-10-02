@@ -182,6 +182,8 @@ export async function getAllOrders() {
         couponCode: orders.couponCode,
         discountAmount: orders.discountAmount,
         commissionAmount: orders.commissionAmount,
+        commissionPaid: orders.commissionPaid,
+        commissionPaidAt: orders.commissionPaidAt,
         createdAt: orders.createdAt,
         userName: users.name,
         userPhone: users.phone,
