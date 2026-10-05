@@ -5,7 +5,8 @@ import { placeOrder } from "@/app/actions/orderActions";
 import { validatePhone } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
 import { useState, useTransition } from "react";
-import { User, Phone, MapPin, AlertCircle, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { User, Phone, MapPin, AlertCircle, Loader2, ShoppingBag, ShieldCheck } from "lucide-react";
 import dynamic from "next/dynamic";
 import DeliveryTimePicker from "./DeliveryTimePicker";
 
@@ -19,11 +20,14 @@ const DeliveryMap = dynamic(() => import("./DeliveryMapClient"), {
 });
 
 export default function CheckoutForm() {
+  const router = useRouter();
   const customerInfo = useCartStore((s) => s.customerInfo);
   const setCustomerInfo = useCartStore((s) => s.setCustomerInfo);
   const items = useCartStore((s) => s.items);
   const getSubtotal = useCartStore((s) => s.getSubtotal);
   const getDeliveryFee = useCartStore((s) => s.getDeliveryFee);
+  const getTotal = useCartStore((s) => s.getTotal);
+  const clearCart = useCartStore((s) => s.clearCart);
   const isDeliverable = useCartStore((s) => s.isDeliverable);
   const requestedDeliveryTime = useCartStore((s) => s.requestedDeliveryTime);
   const deliverySlotLabel = useCartStore((s) => s.deliverySlotLabel);
@@ -31,13 +35,15 @@ export default function CheckoutForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
 
+  const total = getTotal();
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!customerInfo.name.trim()) newErrors.name = "Name is required";
+    if (!customerInfo.name.trim()) newErrors.name = "Full name is required";
     if (!validatePhone(customerInfo.phone))
       newErrors.phone = "Enter a valid 10-digit Indian mobile number";
-    if (!customerInfo.address.trim() || customerInfo.address.length < 10)
-      newErrors.address = "Please enter a full delivery address";
+    if (!customerInfo.address.trim() || customerInfo.address.trim().length < 10)
+      newErrors.address = "Please enter a full delivery address (minimum 10 characters)";
     if (!isDeliverable)
       newErrors.zone = "Your location is outside our delivery zone (10km radius)";
     if (!requestedDeliveryTime || !deliverySlotLabel) {
@@ -79,8 +85,11 @@ export default function CheckoutForm() {
           orderNumber,
         });
 
-        if (res?.success && res?.whatsappUrl) {
-          window.location.href = res.whatsappUrl;
+        if (res?.success && res?.orderId) {
+          // Clear cart on successful order placement
+          clearCart();
+          // Redirect directly to the order confirmation page
+          router.push(`/orders/${res.orderId}`);
         } else if (res?.error) {
           setErrors({ submit: res.error });
         } else {
@@ -98,26 +107,35 @@ export default function CheckoutForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 mt-6">
-      <h3 className="font-display font-bold text-brand-primary text-xl">
-        Delivery Details
-      </h3>
+      <div className="border-b border-gray-100 pb-3">
+        <h3 className="font-display font-bold text-brand-primary text-xl flex items-center gap-2">
+          <ShoppingBag size={20} className="text-brand-accent" />
+          Delivery Details
+        </h3>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Enter your delivery details to confirm your fresh pre-order.
+        </p>
+      </div>
 
       {/* Name */}
       <div className="space-y-1.5">
-        <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <User size={14} /> Your Name
+        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+          <User size={13} className="text-brand-primary" /> Your Name *
         </label>
         <input
           type="text"
-          placeholder="Full name"
+          placeholder="e.g. Priyanshu Das"
           value={customerInfo.name}
-          onChange={(e) => setCustomerInfo({ name: e.target.value })}
-          className={`w-full border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-accent transition ${
-            errors.name ? "border-red-400" : "border-gray-200"
+          onChange={(e) => {
+            setCustomerInfo({ name: e.target.value });
+            if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
+          }}
+          className={`w-full border rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-primary transition bg-white ${
+            errors.name ? "border-rose-400 bg-rose-50/20" : "border-gray-200"
           }`}
         />
         {errors.name && (
-          <p className="text-red-500 text-xs flex items-center gap-1">
+          <p className="text-rose-600 text-xs flex items-center gap-1 font-medium">
             <AlertCircle size={12} /> {errors.name}
           </p>
         )}
@@ -125,29 +143,29 @@ export default function CheckoutForm() {
 
       {/* Phone */}
       <div className="space-y-1.5">
-        <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <Phone size={14} /> WhatsApp Number
+        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+          <Phone size={13} className="text-brand-primary" /> Mobile / WhatsApp Number *
         </label>
         <div className="flex">
-          <span className="inline-flex items-center px-3 border border-r-0 border-gray-200 rounded-l-xl bg-gray-50 text-sm text-gray-500">
+          <span className="inline-flex items-center px-3.5 border border-r-0 border-gray-200 rounded-l-2xl bg-gray-50 text-sm font-semibold text-gray-600">
             +91
           </span>
           <input
             type="tel"
             placeholder="10-digit mobile"
             value={customerInfo.phone}
-            onChange={(e) =>
-              setCustomerInfo({
-                phone: e.target.value.replace(/\D/g, "").slice(0, 10),
-              })
-            }
-            className={`flex-1 border rounded-r-xl px-4 py-3 text-sm outline-none focus:border-brand-accent transition ${
-              errors.phone ? "border-red-400" : "border-gray-200"
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+              setCustomerInfo({ phone: val });
+              if (errors.phone) setErrors((prev) => ({ ...prev, phone: "" }));
+            }}
+            className={`flex-1 border rounded-r-2xl px-4 py-3 text-sm font-mono outline-none focus:border-brand-primary transition bg-white ${
+              errors.phone ? "border-rose-400 bg-rose-50/20" : "border-gray-200"
             }`}
           />
         </div>
         {errors.phone && (
-          <p className="text-red-500 text-xs flex items-center gap-1">
+          <p className="text-rose-600 text-xs flex items-center gap-1 font-medium">
             <AlertCircle size={12} /> {errors.phone}
           </p>
         )}
@@ -155,78 +173,88 @@ export default function CheckoutForm() {
 
       {/* Address */}
       <div className="space-y-1.5">
-        <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <MapPin size={14} /> Delivery Address
+        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+          <MapPin size={13} className="text-brand-primary" /> Full Delivery Address *
         </label>
         <textarea
-          placeholder="Flat/House no., Street, Landmark, Area"
+          placeholder="Flat / House no., Building, Street, Landmark, Area (Guwahati)"
           rows={3}
           value={customerInfo.address}
-          onChange={(e) => setCustomerInfo({ address: e.target.value })}
-          className={`w-full border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-accent transition resize-none ${
-            errors.address ? "border-red-400" : "border-gray-200"
+          onChange={(e) => {
+            setCustomerInfo({ address: e.target.value });
+            if (errors.address) setErrors((prev) => ({ ...prev, address: "" }));
+          }}
+          className={`w-full border rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-primary transition resize-none bg-white ${
+            errors.address ? "border-rose-400 bg-rose-50/20" : "border-gray-200"
           }`}
         />
         {errors.address && (
-          <p className="text-red-500 text-xs flex items-center gap-1">
+          <p className="text-rose-600 text-xs flex items-center gap-1 font-medium">
             <AlertCircle size={12} /> {errors.address}
           </p>
         )}
       </div>
 
-      {/* Map */}
+      {/* Map Pin Location */}
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <MapPin size={14} /> Pin your location
-        </p>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+            <MapPin size={13} className="text-brand-primary" /> Pin Exact Location on Map
+          </label>
+          <span className="text-[11px] text-gray-400 font-medium">10km Delivery Radius</span>
+        </div>
         <DeliveryMap />
         {isDeliverable ? (
-          <p className="text-green-600 text-xs font-medium flex items-center gap-1">
-            ✓ Great! Your location is within our delivery zone.
+          <p className="text-emerald-700 text-xs font-semibold flex items-center gap-1">
+            ✓ Your pinned location is within our Guwahati delivery radius.
           </p>
         ) : (
-          <p className="text-amber-600 text-xs flex items-center gap-1">
-            <AlertCircle size={12} /> Drop a pin on the map to verify your delivery zone.
+          <p className="text-amber-700 text-xs font-medium flex items-center gap-1">
+            <AlertCircle size={12} /> Pinned location is outside our 10km radius.
           </p>
         )}
         {errors.zone && (
-          <p className="text-red-500 text-xs flex items-center gap-1">
+          <p className="text-rose-600 text-xs flex items-center gap-1 font-medium">
             <AlertCircle size={12} /> {errors.zone}
           </p>
         )}
       </div>
 
-      {/* Delivery Time Scheduling */}
+      {/* Delivery Time Slot Scheduling */}
       <DeliveryTimePicker error={errors.slot} />
 
       {errors.submit && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-1.5">
-          <AlertCircle size={14} className="shrink-0" />
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-center gap-2 font-medium">
+          <AlertCircle size={16} className="shrink-0" />
           <span>{errors.submit}</span>
         </div>
       )}
 
-      {/* Submit */}
-      <button
-        type="submit"
-        disabled={isPending || !isDeliverable}
-        className="w-full flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-accent disabled:bg-gray-200 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
-      >
-        {isPending ? (
-          <>
-            <Loader2 size={18} className="animate-spin" />
-            Placing Order…
-          </>
-        ) : (
-          <>
-            🛒 Place Pre-Order via WhatsApp
-          </>
-        )}
-      </button>
+      {/* Submit Button */}
+      <div className="space-y-2 pt-2">
+        <button
+          type="submit"
+          disabled={isPending || !isDeliverable}
+          className="w-full flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-accent disabled:bg-gray-200 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl text-base transition-all hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-brand-primary/20"
+        >
+          {isPending ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              <span>Confirming Order…</span>
+            </>
+          ) : (
+            <>
+              <ShieldCheck size={18} />
+              <span>Confirm Pre-Order (₹{total})</span>
+            </>
+          )}
+        </button>
 
-      <p className="text-center text-xs text-gray-400">
-        You'll be redirected to WhatsApp to confirm your order.
-      </p>
+        <p className="text-center text-[11px] text-gray-400">
+          🔒 Secure in-app checkout · 100% fresh pre-order kitchen
+        </p>
+      </div>
     </form>
   );
 }
+

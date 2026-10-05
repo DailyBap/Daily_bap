@@ -20,6 +20,7 @@ import { users, orders, chatSessions } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { calculateOrderTotals } from "@/lib/pricing";
 import { getKitchenStatus } from "@/app/actions/adminActions";
+import { sendTelegramOrderNotification } from "@/lib/telegram";
 import { eq } from "drizzle-orm";
 import type { CartItem, CustomerInfo } from "@/types";
 
@@ -295,12 +296,29 @@ export async function POST(req: Request) {
                   influencerId: pricingRes.influencerId,
                   discountAmount: pricingRes.discountAmount,
                   commissionAmount: pricingRes.commissionAmount,
-                  status: "draft",
-                  whatsappSent: "yes",
+                  status: "pending",
+                  whatsappSent: "no",
                 })
                 .returning({ id: orders.id });
 
-              // 5. Generate WhatsApp checkout deep link
+              // 5. Trigger Non-blocking Telegram Notification (Task 6)
+              void sendTelegramOrderNotification({
+                orderId: newOrder.id,
+                orderNumber,
+                customerName,
+                customerPhone: cleanPhone,
+                deliveryAddress,
+                deliverySlotLabel: slotLabel,
+                items: pricingRes.items as Array<{ name?: string; summary?: string; quantity?: number; price?: number }>,
+                totalAmount: pricingRes.total,
+                deliveryFee: pricingRes.deliveryFee,
+                discountAmount: pricingRes.discountAmount,
+                couponCode: pricingRes.couponCode,
+              }).catch((err) => {
+                console.error("[chat/createOrderRecord] Telegram notification error:", err);
+              });
+
+              // 6. Generate WhatsApp checkout deep link
               const customer: CustomerInfo = {
                 name: customerName,
                 phone: cleanPhone,

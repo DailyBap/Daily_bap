@@ -93,12 +93,13 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
       .from(orders)
       .where(istRangeCondition);
 
-    const grossRevenue = summary?.grossRevenue || 0;
-    const totalOrdersCount = summary?.deliveredCount || 0;
-    const averageOrderValue = totalOrdersCount > 0 ? Math.round(grossRevenue / totalOrdersCount) : 0;
-    const totalDiscounts = summary?.totalDiscounts || 0;
-    const totalCommission = summary?.totalCommission || 0;
-    const netRevenue = grossRevenue - totalCommission;
+    const grossRevenue = Math.max(0, Number(summary?.grossRevenue) || 0);
+    const totalOrdersCount = Math.max(0, Number(summary?.deliveredCount) || 0);
+    const averageOrderValue =
+      totalOrdersCount > 0 ? Math.round(grossRevenue / totalOrdersCount) : 0;
+    const totalDiscounts = Math.max(0, Number(summary?.totalDiscounts) || 0);
+    const totalCommission = Math.max(0, Number(summary?.totalCommission) || 0);
+    const netRevenue = Math.max(0, grossRevenue - totalCommission);
 
     // 2. Per-Creator Sales Breakdown (SQL Aggregation)
     const creatorBreakdownRaw = await db
@@ -120,6 +121,19 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
       .groupBy(influencers.id)
       .orderBy(desc(sql`grossSales`));
 
+    const sanitizedCreatorBreakdown: SalesBreakdownPerCreator[] = (
+      creatorBreakdownRaw || []
+    ).map((c) => ({
+      influencerId: c.influencerId,
+      creatorName: c.creatorName || "Creator",
+      creatorCode: c.creatorCode || "—",
+      deliveredOrders: Math.max(0, Number(c.deliveredOrders) || 0),
+      grossSales: Math.max(0, Number(c.grossSales) || 0),
+      totalDiscount: Math.max(0, Number(c.totalDiscount) || 0),
+      totalCommission: Math.max(0, Number(c.totalCommission) || 0),
+      unpaidCommission: Math.max(0, Number(c.unpaidCommission) || 0),
+    }));
+
     // 3. Day-by-Day Revenue Chart Data (SQL Aggregation in IST)
     const dailyRaw = await db
       .select({
@@ -132,6 +146,12 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
       .groupBy(sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')`)
       .orderBy(sql`dateStr`);
 
+    const sanitizedDailyChartData: DayByDaySales[] = (dailyRaw || []).map((d) => ({
+      dateStr: d.dateStr || "",
+      deliveredOrders: Math.max(0, Number(d.deliveredOrders) || 0),
+      revenue: Math.max(0, Number(d.revenue) || 0),
+    }));
+
     return {
       yearMonthIST: targetMonth,
       grossRevenue,
@@ -141,15 +161,15 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
       totalCommission,
       netRevenue,
       statusBreakdown: {
-        pending: summary?.pendingCount || 0,
-        confirmed: summary?.confirmedCount || 0,
-        preparing: summary?.preparingCount || 0,
-        out_for_delivery: summary?.outForDeliveryCount || 0,
+        pending: Math.max(0, Number(summary?.pendingCount) || 0),
+        confirmed: Math.max(0, Number(summary?.confirmedCount) || 0),
+        preparing: Math.max(0, Number(summary?.preparingCount) || 0),
+        out_for_delivery: Math.max(0, Number(summary?.outForDeliveryCount) || 0),
         delivered: totalOrdersCount,
-        cancelled: summary?.cancelledCount || 0,
+        cancelled: Math.max(0, Number(summary?.cancelledCount) || 0),
       },
-      creatorBreakdown: creatorBreakdownRaw,
-      dailyChartData: dailyRaw,
+      creatorBreakdown: sanitizedCreatorBreakdown,
+      dailyChartData: sanitizedDailyChartData,
     };
   } catch (error) {
     console.error("[getSalesStatsAction] Error calculating sales stats:", error);

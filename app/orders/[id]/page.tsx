@@ -107,9 +107,12 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
   );
 
   const currentStatusIndex =
-    order.status === "cancelled" || order.status === "draft"
+    order.status === "cancelled"
       ? -1
       : STATUS_STEPS.findIndex((s) => s.key === order.status);
+
+  const displayOrderNo =
+    order.orderNumber || `BAP-${order.id.slice(0, 6).toUpperCase()}`;
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans py-8 px-4 sm:px-6 lg:px-8">
@@ -122,45 +125,50 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
           >
             <ArrowLeft className="w-4 h-4" /> Back to Daily Bap
           </Link>
-          <span className="text-xs text-gray-500 font-mono">
-            ID: {order.id.slice(0, 8)}...
+          <span className="text-xs text-gray-500 font-mono bg-white px-2.5 py-1 rounded-lg border border-gray-200 shadow-2xs">
+            {displayOrderNo}
           </span>
         </div>
 
         {/* Card Container */}
         <div className="bg-white rounded-3xl shadow-xl border border-gray-200/80 overflow-hidden">
           {/* Header Banner */}
-          <div className="bg-[#445916] text-white p-6 text-center space-y-2">
+          <div className="bg-[#445916] text-white p-6 sm:p-8 text-center space-y-2">
+            <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center mx-auto text-2xl mb-1 shadow-inner">
+              🍱
+            </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-              Order Status Tracking
+              Order Confirmed!
             </h1>
-            <p className="text-xs sm:text-sm text-gray-200">
-              {siteConfig.name} — 100% Pre-Order Korean Kitchen
+            <p className="text-xs sm:text-sm text-gray-200 max-w-md mx-auto">
+              Thank you, <strong>{user.name}</strong>! Your Korean pre-order is locked in and will be cooked fresh.
             </p>
           </div>
 
-          {/* Draft Order Banner */}
-          {order.status === "draft" && (
-            <div className="p-6 bg-amber-50 border-b border-amber-200 text-center space-y-4">
-              <div className="flex flex-col items-center justify-center gap-2">
-                <AlertTriangle className="w-8 h-8 text-amber-600 animate-bounce" />
-                <h2 className="text-base sm:text-lg font-bold text-amber-900 leading-snug max-w-xl mx-auto">
-                  ⚠️ Action Required: Your order is saved, but not yet confirmed! Please send the pre-filled WhatsApp message to our kitchen to secure your delivery slot.
-                </h2>
-              </div>
+          {/* Success Banner */}
+          <div className="p-4 bg-emerald-50 border-b border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <div>
-                <a
-                  href={waLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3 px-6 rounded-2xl text-sm transition-all hover:scale-105 shadow-md shadow-emerald-600/20"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  <span>Send WhatsApp Now</span>
-                </a>
+                <p className="text-xs font-bold text-emerald-950">
+                  Order Reference: <span className="font-mono text-emerald-800">{displayOrderNo}</span>
+                </p>
+                <p className="text-[11px] text-emerald-700">
+                  We'll start cooking fresh 45 mins before your slot.
+                </p>
               </div>
             </div>
-          )}
+
+            <a
+              href={waLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs py-2 px-3.5 rounded-xl transition shrink-0 shadow-xs"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Questions? WhatsApp</span>
+            </a>
+          </div>
 
           {/* Cancelled Banner */}
           {order.status === "cancelled" ? (
@@ -178,7 +186,7 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
             /* Progress Tracker Stepper */
             <div className="p-6 border-b border-gray-100 bg-gray-50/50">
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center mb-6">
-                Live Status
+                Live Kitchen Status
               </h2>
 
               <div className="relative flex items-center justify-between">
@@ -200,8 +208,8 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
                 {/* Steps */}
                 {STATUS_STEPS.map((step, idx) => {
                   const Icon = step.icon;
-                  const isCompleted = idx <= currentStatusIndex;
-                  const isCurrent = idx === currentStatusIndex;
+                  const isCompleted = idx <= (currentStatusIndex < 0 ? 0 : currentStatusIndex);
+                  const isCurrent = idx === (currentStatusIndex < 0 ? 0 : currentStatusIndex);
 
                   return (
                     <div

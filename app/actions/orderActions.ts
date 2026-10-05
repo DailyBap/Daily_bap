@@ -11,6 +11,7 @@ import { calculateOrderTotals, validateCouponCode } from "@/lib/pricing";
 import { getClientIp } from "@/lib/adminAuth";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
 import { eq, count } from "drizzle-orm";
+import { sendTelegramOrderNotification } from "@/lib/telegram";
 import type { CartItem, CustomerInfo } from "@/types";
 
 /**
@@ -78,16 +79,17 @@ export async function getSlotCapacities(): Promise<Record<string, number>> {
 }
 
 /**
- * Server Action: Save the order to Neon DB and return WhatsApp deep link.
+ * Server Action: Save the order to Neon DB, trigger Telegram bot alert, and return order details.
  * 1. Validate requested delivery slot server-side
  * 2. Calculate authoritative order totals, distance, discounts, and fees using lib/pricing.ts
  * 3. Upsert user by phone number
- * 4. Insert order record (status: draft, with orderNumber, coupon & commission snapshots)
- * 5. Generate WhatsApp deep-link with order tracking link & slot label
+ * 4. Insert order record directly with status: "pending"
+ * 5. Send real-time Telegram notification to admin (non-blocking)
+ * 6. Return orderId and optional WhatsApp link for tracking/support
  */
 export async function placeOrder(
   payload: PlaceOrderPayload
-): Promise<{ success: boolean; whatsappUrl?: string; orderId?: string; error?: string }> {
+): Promise<{ success: boolean; whatsappUrl?: string; orderId?: string; orderNumber?: string; error?: string }> {
   try {
     const {
       items,
@@ -172,7 +174,7 @@ export async function placeOrder(
       userId = newUser.id;
     }
 
-    // 4. Insert order record with coupon & commission snapshots
+    // 4. Insert order record with status "pending" directly
     const [newOrder] = await db
       .insert(orders)
       .values({
@@ -188,12 +190,29 @@ export async function placeOrder(
         influencerId: pricingRes.influencerId,
         discountAmount: pricingRes.discountAmount,
         commissionAmount: pricingRes.commissionAmount,
-        status: "draft",
-        whatsappSent: "yes",
+        status: "pending",
+        whatsappSent: "no",
       })
       .returning({ id: orders.id });
 
-    // 5. Generate WhatsApp deep-link using server-validated prices
+    // 5. Trigger Non-blocking Telegram Notification (Task 6)
+    void sendTelegramOrderNotification({
+      orderId: newOrder.id,
+      orderNumber,
+      customerName: customer.name,
+      customerPhone: cleanPhone,
+      deliveryAddress: customer.address,
+      deliverySlotLabel,
+      items: pricingRes.items as Array<{ name?: string; summary?: string; quantity?: number; price?: number }>,
+      totalAmount: pricingRes.total,
+      deliveryFee: pricingRes.deliveryFee,
+      discountAmount: pricingRes.discountAmount,
+      couponCode: pricingRes.couponCode,
+    }).catch((err) => {
+      console.error("[placeOrder] Telegram notification error:", err);
+    });
+
+    // 6. Generate optional WhatsApp link for customer's reference
     const whatsappUrl = generateWhatsAppLink(
       pricingRes.items as CartItem[],
       customer,
@@ -204,7 +223,7 @@ export async function placeOrder(
       orderNumber
     );
 
-    return { success: true, whatsappUrl, orderId: newOrder.id };
+    return { success: true, whatsappUrl, orderId: newOrder.id, orderNumber };
   } catch (error: unknown) {
     console.error("[placeOrder] Error saving order:", error);
     const msg =

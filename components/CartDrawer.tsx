@@ -305,8 +305,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   onClick={() => setShowCheckout(true)}
                   className="w-full flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-accent text-white font-bold py-4 rounded-2xl text-base transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-brand-primary/20"
                 >
-                  <MessageCircle size={18} />
-                  Checkout via WhatsApp
+                  <ShoppingBag size={18} />
+                  <span>Proceed to Checkout (₹{total})</span>
                 </button>
               ) : (
                 <CheckoutForm />

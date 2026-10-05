@@ -15,6 +15,7 @@ import {
   createInfluencerAction,
   updateInfluencerAction,
   toggleInfluencerStatusAction,
+  deleteInfluencerAction,
   markOrderCommissionPaidAction,
   markMonthlyCommissionPaidAction,
   InfluencerWithStats,
@@ -61,6 +62,7 @@ import {
   Upload,
   FileSpreadsheet,
   FileWarning,
+  Trash2,
 } from "lucide-react";
 
 interface OrderItem {
@@ -174,6 +176,10 @@ export default function AdminDashboardClient({
   const [payoutMonth, setPayoutMonth] = useState<string>(currentMonthStr);
   const [payoutError, setPayoutError] = useState("");
 
+  // Delete Creator Modal State (Task 2)
+  const [deletingCreator, setDeletingCreator] = useState<InfluencerWithStats | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+
   // Import Modal State
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -188,6 +194,13 @@ export default function AdminDashboardClient({
   const [offerSuccess, setOfferSuccess] = useState("");
 
   const [isPending, startTransition] = useTransition();
+
+  // Bulletproof currency formatter preventing any NaN display (Task 4)
+  const formatINR = (val: number | null | undefined): string => {
+    const num = Number(val);
+    if (isNaN(num) || num === null || num === undefined) return "₹0";
+    return `₹${num.toLocaleString("en-IN")}`;
+  };
 
   // Login Handler
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -444,6 +457,30 @@ export default function AdminDashboardClient({
     });
   };
 
+  // Permanently Delete Creator Handler (Task 2)
+  const handleDeleteCreatorSubmit = () => {
+    if (!deletingCreator) return;
+    const targetId = deletingCreator.id;
+    setDeleteError("");
+
+    // Optimistically remove from state so the UI updates instantly
+    setInfluencersList((prev) => prev.filter((item) => item.id !== targetId));
+    setDeletingCreator(null);
+
+    startTransition(async () => {
+      const res = await deleteInfluencerAction(targetId);
+      if (!res.success) {
+        setDeleteError(res.error || "Failed to delete creator.");
+        refreshInfluencers();
+      } else {
+        refreshInfluencers();
+        if (activeTab === "analytics") {
+          refreshSalesStats(selectedMonth);
+        }
+      }
+    });
+  };
+
   // Create Offer Handler
   const handleCreateOffer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -566,8 +603,8 @@ export default function AdminDashboardClient({
         {/* OPERATIONAL STATUS & AUTO REVIEW TOGGLES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Kitchen Status */}
-          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-4">
+          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
               <div
                 className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
                   isKitchenClosed
@@ -581,9 +618,9 @@ export default function AdminDashboardClient({
                   <CheckCircle2 className="w-6 h-6" />
                 )}
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-display font-bold text-base text-gray-900">
+                  <h2 className="font-display font-bold text-base text-gray-900 whitespace-normal break-words">
                     Kitchen Status:{" "}
                     <span
                       className={
@@ -594,7 +631,7 @@ export default function AdminDashboardClient({
                     </span>
                   </h2>
                   <span
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
                       isKitchenClosed
                         ? "bg-rose-100 text-rose-800 border border-rose-200"
                         : "bg-emerald-100 text-emerald-800 border border-emerald-200"
@@ -603,7 +640,7 @@ export default function AdminDashboardClient({
                     {isKitchenClosed ? "Holiday Mode" : "Normal Hours"}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1 whitespace-normal break-words">
                   {isKitchenClosed
                     ? "Same-day ordering is disabled on the website."
                     : "Kitchen accepting orders for Today & Tomorrow."}
@@ -615,7 +652,7 @@ export default function AdminDashboardClient({
               type="button"
               disabled={isPending}
               onClick={handleToggleKitchenStatus}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 ${
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto ${
                 isKitchenClosed
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                   : "bg-rose-600 hover:bg-rose-700 text-white"
@@ -635,9 +672,9 @@ export default function AdminDashboardClient({
             </button>
           </section>
 
-          {/* Review Ping */}
-          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-4">
+          {/* Review Ping (Task 3: Fixed Overflow & Wrapping) */}
+          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
               <div
                 className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
                   isAutoReviewActive
@@ -647,9 +684,9 @@ export default function AdminDashboardClient({
               >
                 <Star className="w-6 h-6 fill-current text-amber-500" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-display font-bold text-base text-gray-900">
+                  <h2 className="font-display font-bold text-base text-gray-900 whitespace-normal break-words">
                     Post-Delivery Review Ping:{" "}
                     <span
                       className={
@@ -660,7 +697,7 @@ export default function AdminDashboardClient({
                     </span>
                   </h2>
                   <span
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
                       isAutoReviewActive
                         ? "bg-amber-100 text-amber-800 border border-amber-200"
                         : "bg-gray-100 text-gray-600 border border-gray-200"
@@ -669,7 +706,7 @@ export default function AdminDashboardClient({
                     {isAutoReviewActive ? "Auto Trigger On" : "Manual Only"}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1 whitespace-normal break-words">
                   Sends Google Review link upon order completion (`delivered`).
                 </p>
               </div>
@@ -679,7 +716,7 @@ export default function AdminDashboardClient({
               type="button"
               disabled={isPending}
               onClick={handleToggleAutoReview}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 ${
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto ${
                 isAutoReviewActive
                   ? "bg-amber-500 hover:bg-amber-600 text-white"
                   : "bg-gray-700 hover:bg-gray-800 text-white"
@@ -1129,6 +1166,17 @@ export default function AdminDashboardClient({
                       >
                         <DollarSign className="w-3.5 h-3.5" /> Payout
                       </button>
+
+                      <button
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeletingCreator(inf);
+                        }}
+                        className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl transition"
+                        title="Delete Creator Coupon"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1173,7 +1221,7 @@ export default function AdminDashboardClient({
 
             {salesStats ? (
               <>
-                {/* 6 Key Performance Indicator Cards */}
+                {/* 6 Key Performance Indicator Cards (Task 4: Guaranteed NaN-free formatINR) */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   {/* Gross Revenue */}
                   <div className="bg-white p-5 rounded-3xl border border-gray-200/80 shadow-xs space-y-1">
@@ -1181,7 +1229,7 @@ export default function AdminDashboardClient({
                       Gross Revenue
                     </span>
                     <p className="text-xl font-display font-extrabold text-emerald-700">
-                      ₹{salesStats.grossRevenue}
+                      {formatINR(salesStats.grossRevenue)}
                     </p>
                     <span className="text-[10px] text-gray-400 block">Delivered total</span>
                   </div>
@@ -1192,7 +1240,7 @@ export default function AdminDashboardClient({
                       Delivered Orders
                     </span>
                     <p className="text-xl font-display font-extrabold text-brand-primary">
-                      {salesStats.totalOrdersCount}
+                      {salesStats.totalOrdersCount || 0}
                     </p>
                     <span className="text-[10px] text-gray-400 block">Completed count</span>
                   </div>
@@ -1203,7 +1251,7 @@ export default function AdminDashboardClient({
                       Avg Order Value
                     </span>
                     <p className="text-xl font-display font-extrabold text-indigo-700">
-                      ₹{salesStats.averageOrderValue}
+                      {formatINR(salesStats.averageOrderValue)}
                     </p>
                     <span className="text-[10px] text-gray-400 block">Gross / Delivered</span>
                   </div>
@@ -1214,7 +1262,7 @@ export default function AdminDashboardClient({
                       Total Discounts
                     </span>
                     <p className="text-xl font-display font-extrabold text-amber-700">
-                      −₹{salesStats.totalDiscounts}
+                      −{formatINR(salesStats.totalDiscounts)}
                     </p>
                     <span className="text-[10px] text-gray-400 block">Given to buyers</span>
                   </div>
@@ -1225,7 +1273,7 @@ export default function AdminDashboardClient({
                       Creator Comm.
                     </span>
                     <p className="text-xl font-display font-extrabold text-purple-700">
-                      ₹{salesStats.totalCommission}
+                      {formatINR(salesStats.totalCommission)}
                     </p>
                     <span className="text-[10px] text-gray-400 block">Payable to creators</span>
                   </div>
@@ -1236,7 +1284,7 @@ export default function AdminDashboardClient({
                       Net Revenue
                     </span>
                     <p className="text-xl font-display font-extrabold text-emerald-900">
-                      ₹{salesStats.netRevenue}
+                      {formatINR(salesStats.netRevenue)}
                     </p>
                     <span className="text-[10px] text-emerald-700 block">Gross − Comm</span>
                   </div>
@@ -1294,7 +1342,7 @@ export default function AdminDashboardClient({
                                 {/* Tooltip */}
                                 <div className="absolute -top-10 hidden group-hover:flex flex-col items-center bg-gray-900 text-white text-[10px] py-1 px-2 rounded-md shadow-lg whitespace-nowrap z-10">
                                   <span>{d.dateStr}</span>
-                                  <span className="font-bold text-emerald-400">₹{d.revenue} ({d.deliveredOrders} orders)</span>
+                                  <span className="font-bold text-emerald-400">{formatINR(d.revenue)} ({d.deliveredOrders} orders)</span>
                                 </div>
                                 <div
                                   style={{ height: `${heightPct}%` }}
@@ -1353,13 +1401,13 @@ export default function AdminDashboardClient({
                                 </span>
                               </td>
                               <td className="px-6 py-4 font-bold">{row.deliveredOrders}</td>
-                              <td className="px-6 py-4 font-bold text-gray-900">₹{row.grossSales}</td>
-                              <td className="px-6 py-4 text-emerald-600 font-bold">−₹{row.totalDiscount}</td>
-                              <td className="px-6 py-4 text-purple-700 font-bold">₹{row.totalCommission}</td>
+                              <td className="px-6 py-4 font-bold text-gray-900">{formatINR(row.grossSales)}</td>
+                              <td className="px-6 py-4 text-emerald-600 font-bold">−{formatINR(row.totalDiscount)}</td>
+                              <td className="px-6 py-4 text-purple-700 font-bold">{formatINR(row.totalCommission)}</td>
                               <td className="px-6 py-4 font-bold text-amber-700">
                                 {row.unpaidCommission > 0 ? (
                                   <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md border border-amber-200">
-                                    ₹{row.unpaidCommission}
+                                    {formatINR(row.unpaidCommission)}
                                   </span>
                                 ) : (
                                   <span className="text-gray-400">₹0</span>
@@ -2108,7 +2156,84 @@ export default function AdminDashboardClient({
           </div>
         </div>
       )}
+
+      {/* MODAL 5: DELETE CREATOR CONFIRMATION (Task 2) */}
+      {deletingCreator && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white max-w-md w-full rounded-3xl p-6 space-y-5 border border-gray-200 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <h3 className="font-display font-bold text-lg text-rose-700 flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                Delete Creator Partner
+              </h3>
+              <button
+                onClick={() => setDeletingCreator(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-gray-600">
+              <p>
+                Are you sure you want to permanently delete creator{" "}
+                <strong className="text-gray-900">{deletingCreator.name}</strong> (Coupon:{" "}
+                <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                  {deletingCreator.code}
+                </span>
+                )?
+              </p>
+
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 space-y-1">
+                <p className="font-bold flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  Important Note:
+                </p>
+                <p className="text-[11px] leading-relaxed text-rose-700">
+                  This action removes the coupon code from the system. Historical orders will preserve their stored snapshot details and discounts.
+                </p>
+              </div>
+
+              {deleteError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-1.5 font-medium">
+                  <AlertCircle size={14} className="shrink-0" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingCreator(null)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={handleDeleteCreatorSubmit}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-bold text-xs rounded-xl transition shadow-md flex items-center justify-center gap-1.5"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting…</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Creator</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 

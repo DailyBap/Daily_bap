@@ -276,3 +276,32 @@ export async function markMonthlyCommissionPaidAction(
     return { success: false, error: "Failed to update monthly payout status." };
   }
 }
+
+/**
+ * Server Action: Permanently delete a creator coupon (Task 2)
+ * Disconnects any referencing order records by setting influencerId to NULL
+ * while preserving the historical order, coupon_code string, and discount amounts.
+ */
+export async function deleteInfluencerAction(id: string) {
+  if (!(await verifyAdminSession())) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    // 1. Detach from orders so foreign key constraint does not block deletion
+    await db
+      .update(orders)
+      .set({ influencerId: null })
+      .where(eq(orders.influencerId, id));
+
+    // 2. Delete creator row from influencers table
+    await db.delete(influencers).where(eq(influencers.id, id));
+
+    revalidatePath("/admin");
+    return { success: true };
+  } catch (error) {
+    console.error("[deleteInfluencerAction] Error deleting creator:", error);
+    return { success: false, error: "Failed to delete creator coupon." };
+  }
+}
+
