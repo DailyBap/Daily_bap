@@ -120,6 +120,35 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const NOTIFY_PREP_VARIATIONS = [
+  "Hi {name}! 👋 Thanks for choosing Daily Bap. We've received your order #{orderId} and the kitchen is prepping your food fresh right now. We'll ping you the moment it leaves our doors! 🥢",
+  "Hey {name}, your Daily Bap order #{orderId} is confirmed and in the works! 🍳 We're getting everything boxed up and will update you when it's out for delivery.",
+];
+
+const OUT_FOR_DELIVERY_VARIATIONS = [
+  "Your food is on the move, {name}! 🛵 Order #{orderId} has just been dispatched and is heading your way. The rider will call you shortly. Enjoy your meal! 🍱",
+  "Great news, {name}! 🛵 Your Daily Bap order #{orderId} is officially out for delivery. Keep an eye on your phone!",
+];
+
+const REVIEW_PING_VARIATIONS = [
+  "Hi {name}! Hope you loved your Daily Bap today. 🌶️ We are a growing kitchen and your feedback means everything to us. If you enjoyed the food, we'd be thrilled if you tagged us on Instagram @daily.bap.guwahati!",
+  "Hey {name}, hope the food hit the spot today! 🍱 We're constantly tweaking our recipes and would love your honest, unfiltered feedback on your meal. Let us know what you thought!",
+];
+
+const handleWhatsAppAction = (
+  phone: string,
+  variations: string[],
+  name: string,
+  orderId: string
+) => {
+  const randomIndex = Math.floor(Math.random() * variations.length);
+  const message = variations[randomIndex]
+    .replace(/{name}/g, name)
+    .replace(/{orderId}/g, orderId);
+  const whatsappUrl = `https://wa.me/91${phone}?text=${encodeURIComponent(message)}`;
+  window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+};
+
 export default function AdminDashboardClient({
   isAuthenticated: initialAuthStatus,
   initialOrders,
@@ -842,20 +871,6 @@ export default function AdminDashboardClient({
                       const name = order.userName || "Customer";
                       const itemsArray = (Array.isArray(order.items) ? order.items : []) as OrderItem[];
 
-                      const prepMsg = encodeURIComponent(
-                        `Hey ${name}! We've started preparing your order (${displayOrderNo}). 🍳`
-                      );
-                      const deliveryMsg = encodeURIComponent(
-                        `Great news! Your order (${displayOrderNo}) is out for delivery! 🛵`
-                      );
-                      const reviewMsg = encodeURIComponent(
-                        `Hey ${name}! Thank you for ordering from Daily Bap 🍱 We hope you enjoyed your meal! Could you take a moment to leave us a Google review? It helps us immensely: https://g.page/r/CeKt9rDETbXDEBM/review`
-                      );
-
-                      const prepLink = `https://wa.me/91${cleanPhone}?text=${prepMsg}`;
-                      const deliveryLink = `https://wa.me/91${cleanPhone}?text=${deliveryMsg}`;
-                      const reviewLink = `https://wa.me/91${cleanPhone}?text=${reviewMsg}`;
-
                       return (
                         <tr
                           key={order.id}
@@ -974,35 +989,53 @@ export default function AdminDashboardClient({
 
                           {/* WhatsApp Actions */}
                           <td className="px-6 py-4 whitespace-nowrap space-x-2">
-                            <a
-                              href={prepLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleWhatsAppAction(
+                                  cleanPhone,
+                                  NOTIFY_PREP_VARIATIONS,
+                                  name,
+                                  displayOrderNo
+                                )
+                              }
                               className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2.5 py-1.5 rounded-xl border border-emerald-200 transition"
                             >
                               <MessageCircle className="w-3.5 h-3.5" />
                               Notify Prep 🍳
-                            </a>
+                            </button>
 
-                            <a
-                              href={deliveryLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleWhatsAppAction(
+                                  cleanPhone,
+                                  OUT_FOR_DELIVERY_VARIATIONS,
+                                  name,
+                                  displayOrderNo
+                                )
+                              }
                               className="inline-flex items-center gap-1 text-[11px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 px-2.5 py-1.5 rounded-xl border border-blue-200 transition"
                             >
                               <MessageCircle className="w-3.5 h-3.5" />
                               Out for Delivery 🛵
-                            </a>
+                            </button>
 
-                            <a
-                              href={reviewLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleWhatsAppAction(
+                                  cleanPhone,
+                                  REVIEW_PING_VARIATIONS,
+                                  name,
+                                  displayOrderNo
+                                )
+                              }
                               className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1.5 rounded-xl border border-amber-200 transition"
                             >
                               <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                               Review Ping ⭐️
-                            </a>
+                            </button>
                           </td>
                         </tr>
                       );
