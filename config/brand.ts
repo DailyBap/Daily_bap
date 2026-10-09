@@ -277,9 +277,105 @@ export const addOns: MenuItem[] = [
 ];
 
 // Unified menu export for easy iteration
+export const koreanSkewers: MenuItem[] = [
+  {
+    id: "veg-skewers-3",
+    name: "Veg Skewers (3 Sticks)",
+    category: "skewers",
+    price: 129,
+    description: "2 veg/paneer pieces + fresh veggies per stick",
+    tags: ["vegetarian", "skewers"],
+    modelRef: null,
+    isVegetarian: true,
+    image: "/images/placeholder.jpg",
+  },
+  {
+    id: "chicken-skewers-3",
+    name: "Non-Veg Chicken Skewers (3 Sticks)",
+    category: "skewers",
+    price: 149,
+    description: "2 chicken pieces + fresh veggies per stick",
+    tags: ["skewers"],
+    modelRef: null,
+    isVegetarian: false,
+    image: "/images/placeholder.jpg",
+  },
+  {
+    id: "veg-skewers-6",
+    name: "Veg Skewers (6 Sticks)",
+    category: "skewers",
+    price: 229,
+    description: "2 veg/paneer pieces + fresh veggies per stick",
+    tags: ["vegetarian", "skewers"],
+    modelRef: null,
+    isVegetarian: true,
+    image: "/images/placeholder.jpg",
+  },
+  {
+    id: "chicken-skewers-6",
+    name: "Non-Veg Chicken Skewers (6 Sticks)",
+    category: "skewers",
+    price: 249,
+    description: "2 chicken pieces + fresh veggies per stick",
+    tags: ["skewers"],
+    modelRef: null,
+    isVegetarian: false,
+    image: "/images/placeholder.jpg",
+  },
+];
+
+export const kimbapRolls: MenuItem[] = [
+  {
+    id: "veg-kimbap-half",
+    name: "Veg Kimbap (5 Pieces / Half Roll)",
+    category: "kimbap",
+    price: 149,
+    description: "Fresh veggies and egg strips rolled in seaweed and sticky rice",
+    tags: ["vegetarian", "kimbap"],
+    modelRef: null,
+    isVegetarian: true,
+    image: "/images/placeholder.jpg",
+  },
+  {
+    id: "chicken-kimbap-half",
+    name: "Non-Veg Bulgogi Chicken Kimbap (5 Pieces / Half Roll)",
+    category: "kimbap",
+    price: 169,
+    description: "Signature bulgogi chicken, egg, and veggies rolled in seaweed",
+    tags: ["kimbap"],
+    modelRef: null,
+    isVegetarian: false,
+    image: "/images/placeholder.jpg",
+  },
+  {
+    id: "veg-kimbap-full",
+    name: "Veg Kimbap (10 Pieces / Full Roll)",
+    category: "kimbap",
+    price: 279,
+    description: "Fresh veggies and egg strips rolled in seaweed and sticky rice",
+    tags: ["vegetarian", "kimbap"],
+    modelRef: null,
+    isVegetarian: true,
+    image: "/images/placeholder.jpg",
+  },
+  {
+    id: "chicken-kimbap-full",
+    name: "Non-Veg Bulgogi Chicken Kimbap (10 Pieces / Full Roll)",
+    category: "kimbap",
+    price: 299,
+    description: "Signature bulgogi chicken, egg, and veggies rolled in seaweed",
+    tags: ["kimbap"],
+    modelRef: null,
+    isVegetarian: false,
+    image: "/images/placeholder.jpg",
+  },
+];
+
 export const menuData = {
   bentoBoxes,
   bibimbapBowls,
+  koreanSkewers,
+  kimbapRolls,
   authenticSides,
   addOns,
 };
@@ -288,6 +384,8 @@ export const menuData = {
 export const menuCategories = [
   { key: "bentoBoxes", label: "Bento Boxes", emoji: "🍱" },
   { key: "bibimbapBowls", label: "Bibimbap Bowls", emoji: "🥣" },
+  { key: "koreanSkewers", label: "Korean Skewers", emoji: "🍢" },
+  { key: "kimbapRolls", label: "Kimbap Rolls", emoji: "🍙" },
   { key: "authenticSides", label: "Authentic Sides", emoji: "🥒" },
   { key: "addOns", label: "Add-Ons", emoji: "✨" },
 ] as const;

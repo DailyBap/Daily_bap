@@ -75,6 +75,26 @@ ${menuData.bibimbapBowls
   )
   .join("\n")}
 
+--- Korean Skewers ---
+${menuData.koreanSkewers
+  .map(
+    (item) =>
+      `• ${item.name} (ID: "${item.id}") — ₹${item.price} [${
+        item.isVegetarian ? "Vegetarian (V)" : "Non-Vegetarian"
+      }]\n  Description: ${item.description}`
+  )
+  .join("\n")}
+
+--- Kimbap Rolls ---
+${menuData.kimbapRolls
+  .map(
+    (item) =>
+      `• ${item.name} (ID: "${item.id}") — ₹${item.price} [${
+        item.isVegetarian ? "Vegetarian (V)" : "Non-Vegetarian"
+      }]\n  Description: ${item.description}`
+  )
+  .join("\n")}
+
 --- Authentic Sides ---
 ${menuData.authenticSides
   .map(

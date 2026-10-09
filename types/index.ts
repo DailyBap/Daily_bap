@@ -3,12 +3,13 @@
 export interface MenuItem {
   id: string;
   name: string;
-  category: "bento" | "bibimbap" | "sides" | "addons";
+  category: "bento" | "bibimbap" | "sides" | "addons" | "skewers" | "kimbap" | string;
   price: number;
   description: string;
   tags: string[];
   modelRef: string | null;
   isVegetarian?: boolean;
+  image?: string;
 }
 
 export interface CartItem {

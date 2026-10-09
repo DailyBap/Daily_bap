@@ -3,6 +3,8 @@
 import {
   bentoBoxes,
   bibimbapBowls,
+  koreanSkewers,
+  kimbapRolls,
   authenticSides,
   addOns,
 } from "@/config/brand";
@@ -20,7 +22,7 @@ import { eq } from "drizzle-orm";
 // Construct server-side authoritative price catalog map
 const BRAND_MENU_MAP = new Map<string, MenuItem>();
 
-[...bentoBoxes, ...bibimbapBowls, ...authenticSides, ...addOns].forEach((item) => {
+[...bentoBoxes, ...bibimbapBowls, ...koreanSkewers, ...kimbapRolls, ...authenticSides, ...addOns].forEach((item) => {
   BRAND_MENU_MAP.set(item.id, item);
 });
 
