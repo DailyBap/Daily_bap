@@ -295,7 +295,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
                 <div className="border-t border-gray-200 pt-2.5 flex justify-between font-bold text-brand-primary">
                   <span>Total</span>
-                  <span className="text-lg font-display">₹{total}</span>
+                  <span className="price">₹{total}</span>
                 </div>
               </div>
 

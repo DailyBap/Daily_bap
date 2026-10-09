@@ -40,7 +40,7 @@ export default function MenuCard({ item }: MenuCardProps) {
               <div className="mt-1 flex-shrink-0">
                 <DietBadge diet={item.diet} size={18} />
               </div>
-              <h3 className="font-display font-bold text-brand-primary text-lg leading-snug">
+              <h3 className="font-body font-bold text-brand-primary text-lg leading-snug">
                 {displayName}
               </h3>
             </div>
@@ -60,14 +60,14 @@ export default function MenuCard({ item }: MenuCardProps) {
 
           {/* Price */}
           <div className="text-right flex-shrink-0">
-            <span className="font-display font-bold text-xl text-brand-primary">
+            <span className="price">
               ₹{item.price}
             </span>
           </div>
         </div>
 
         {/* Description */}
-        <p className="text-gray-500 text-sm leading-relaxed flex-1 mb-5">
+        <p className="text-[#444] text-sm leading-relaxed flex-1 mb-5">
           {item.description}
         </p>
 
