@@ -4,6 +4,7 @@ import { useState } from "react";
 import { menuData, menuCategories, howToEat, siteConfig, readySection } from "@/config/brand";
 import type { MenuCategoryKey } from "@/config/brand";
 import MenuCard from "./MenuCard";
+import DietBadge from "./DietBadge";
 
 export default function MenuGrid() {
   const [activeTab, setActiveTab] = useState<MenuCategoryKey>("bentoBoxes");
@@ -17,7 +18,7 @@ export default function MenuGrid() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
           {/* Section header */}
-          <div className="text-center mb-14 space-y-3">
+          <div className="text-center mb-10 space-y-3">
             <p className="text-brand-accent text-sm font-semibold tracking-widest uppercase">
               What We Cook
             </p>
@@ -27,6 +28,26 @@ export default function MenuGrid() {
             <p className="text-gray-500 max-w-xl mx-auto">
               Every item cooked specifically for your order. No frozen shortcuts.
             </p>
+          </div>
+
+          {/* Diet Legend & Note */}
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-8 text-xs font-medium text-gray-600 text-center">
+            <div className="inline-flex items-center gap-1.5">
+              <DietBadge diet="veg" size={16} />
+              <span>Veg</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5">
+              <DietBadge diet="egg" size={16} />
+              <span>Egg</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5">
+              <DietBadge diet="nonveg" size={16} />
+              <span>Non-Veg</span>
+            </div>
+            <span className="hidden sm:inline text-gray-300">|</span>
+            <span className="text-gray-500 italic">
+              Our kimchi and gochujang mayo are made without fish sauce or egg.
+            </span>
           </div>
 
           {/* Category tabs */}

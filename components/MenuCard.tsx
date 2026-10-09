@@ -2,7 +2,8 @@
 
 import { useCartStore } from "@/store/useCartStore";
 import type { MenuItem } from "@/types";
-import { Plus, Leaf } from "lucide-react";
+import DietBadge from "@/components/DietBadge";
+import { Plus } from "lucide-react";
 
 interface MenuCardProps {
   item: MenuItem;
@@ -24,6 +25,8 @@ export default function MenuCard({ item }: MenuCardProps) {
     });
   };
 
+  const displayName = item.name.replace(/\s*\(V\)$/i, "");
+
   return (
     <div className="group bg-white rounded-3xl border border-gray-100 hover:border-brand-accent/40 hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col">
       {/* Color band */}
@@ -33,18 +36,13 @@ export default function MenuCard({ item }: MenuCardProps) {
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-start gap-2 mb-1">
+              <div className="mt-1 flex-shrink-0">
+                <DietBadge diet={item.diet} size={18} />
+              </div>
               <h3 className="font-display font-bold text-brand-primary text-lg leading-snug">
-                {item.name}
+                {displayName}
               </h3>
-              {item.isVegetarian && (
-                <span
-                  title="Vegetarian"
-                  className="flex-shrink-0 w-5 h-5 rounded border-2 border-green-600 flex items-center justify-center"
-                >
-                  <Leaf size={10} className="text-green-600" />
-                </span>
-              )}
             </div>
 
             {/* Tags */}
