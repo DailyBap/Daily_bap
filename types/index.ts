@@ -1,5 +1,7 @@
 // types/index.ts — Shared TypeScript interfaces for Daily Bap
 
+export type Diet = "veg" | "egg" | "nonveg";
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -10,6 +12,7 @@ export interface MenuItem {
   modelRef: string | null;
   isVegetarian?: boolean;
   image?: string;
+  diet?: Diet;
 }
 
 export interface CartItem {

@@ -153,6 +153,7 @@ export const bentoBoxes: MenuItem[] = [
       "Crispy double-fried chicken coated in our sweet & spicy glaze, served with fresh house-made kimchi.",
     tags: ["bestseller"],
     modelRef: "bowl-chicken",
+    diet: "nonveg",
   },
   {
     id: "tofu-paneer-bento",
@@ -164,6 +165,7 @@ export const bentoBoxes: MenuItem[] = [
     tags: ["vegetarian"],
     modelRef: "bowl-tofu",
     isVegetarian: true,
+    diet: "veg",
   },
 ];
 
@@ -177,6 +179,7 @@ export const bibimbapBowls: MenuItem[] = [
       "Tender chicken marinated in a savoury-sweet soy & garlic blend, served with Korean-style rice, vegetables and our signature gochujang.",
     tags: ["popular"],
     modelRef: "bowl-bulgogi",
+    diet: "nonveg",
   },
   {
     id: "golden-tofu-bowl",
@@ -188,6 +191,7 @@ export const bibimbapBowls: MenuItem[] = [
     tags: ["vegetarian"],
     modelRef: "bowl-golden-tofu",
     isVegetarian: true,
+    diet: "veg",
   },
 ];
 
@@ -201,6 +205,7 @@ export const authenticSides: MenuItem[] = [
     tags: ["vegan"],
     modelRef: null,
     isVegetarian: true,
+    diet: "veg",
   },
   {
     id: "cucumber-salad",
@@ -211,6 +216,7 @@ export const authenticSides: MenuItem[] = [
     tags: ["vegan"],
     modelRef: null,
     isVegetarian: true,
+    diet: "veg",
   },
   {
     id: "pickled-radish",
@@ -221,6 +227,7 @@ export const authenticSides: MenuItem[] = [
     tags: ["vegan"],
     modelRef: null,
     isVegetarian: true,
+    diet: "veg",
   },
 ];
 
@@ -234,6 +241,7 @@ export const addOns: MenuItem[] = [
     tags: ["vegetarian"],
     modelRef: null,
     isVegetarian: true,
+    diet: "egg",
   },
   {
     id: "extra-rice",
@@ -244,6 +252,7 @@ export const addOns: MenuItem[] = [
     tags: ["vegan"],
     modelRef: null,
     isVegetarian: true,
+    diet: "veg",
   },
   {
     id: "double-protein",
@@ -263,6 +272,7 @@ export const addOns: MenuItem[] = [
     tags: ["vegan"],
     modelRef: null,
     isVegetarian: true,
+    diet: "veg",
   },
   {
     id: "gochujang-mayo",
@@ -273,6 +283,7 @@ export const addOns: MenuItem[] = [
     tags: ["vegetarian"],
     modelRef: null,
     isVegetarian: true,
+    diet: "veg",
   },
 ];
 
@@ -288,6 +299,7 @@ export const koreanSkewers: MenuItem[] = [
     modelRef: null,
     isVegetarian: true,
     image: "/images/placeholder.jpg",
+    diet: "veg",
   },
   {
     id: "chicken-skewers-3",
@@ -299,6 +311,7 @@ export const koreanSkewers: MenuItem[] = [
     modelRef: null,
     isVegetarian: false,
     image: "/images/placeholder.jpg",
+    diet: "nonveg",
   },
   {
     id: "veg-skewers-6",
@@ -310,6 +323,7 @@ export const koreanSkewers: MenuItem[] = [
     modelRef: null,
     isVegetarian: true,
     image: "/images/placeholder.jpg",
+    diet: "veg",
   },
   {
     id: "chicken-skewers-6",
@@ -321,6 +335,7 @@ export const koreanSkewers: MenuItem[] = [
     modelRef: null,
     isVegetarian: false,
     image: "/images/placeholder.jpg",
+    diet: "nonveg",
   },
 ];
 
@@ -335,6 +350,7 @@ export const kimbapRolls: MenuItem[] = [
     modelRef: null,
     isVegetarian: true,
     image: "/images/placeholder.jpg",
+    diet: "egg",
   },
   {
     id: "paneer-kimbap-half",
@@ -346,6 +362,7 @@ export const kimbapRolls: MenuItem[] = [
     modelRef: null,
     isVegetarian: true,
     image: "/images/placeholder.jpg",
+    diet: "veg",
   },
   {
     id: "chicken-kimbap-half",
@@ -357,6 +374,7 @@ export const kimbapRolls: MenuItem[] = [
     modelRef: null,
     isVegetarian: false,
     image: "/images/placeholder.jpg",
+    diet: "nonveg",
   },
   {
     id: "egg-kimbap-full",
@@ -368,6 +386,7 @@ export const kimbapRolls: MenuItem[] = [
     modelRef: null,
     isVegetarian: true,
     image: "/images/placeholder.jpg",
+    diet: "egg",
   },
   {
     id: "paneer-kimbap-full",
@@ -379,6 +398,7 @@ export const kimbapRolls: MenuItem[] = [
     modelRef: null,
     isVegetarian: true,
     image: "/images/placeholder.jpg",
+    diet: "veg",
   },
   {
     id: "chicken-kimbap-full",
@@ -390,6 +410,7 @@ export const kimbapRolls: MenuItem[] = [
     modelRef: null,
     isVegetarian: false,
     image: "/images/placeholder.jpg",
+    diet: "nonveg",
   },
 ];
 
