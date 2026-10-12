@@ -9,6 +9,7 @@ export interface OfferData {
   id?: string;
   title: string;
   code: string;
+  badge?: string;
   discountPercent: number;
   isActive: boolean;
   updatedAt?: string;
@@ -17,6 +18,7 @@ export interface OfferData {
 const DEFAULT_OFFER: OfferData = {
   title: "Get 10% OFF on all authentic Korean pre-orders!",
   code: "DAILY10",
+  badge: "LIMITED TIME",
   discountPercent: 10,
   isActive: true,
   updatedAt: new Date().toISOString(),
@@ -113,6 +115,10 @@ export async function saveOfferData(
     id: payload.id || current.id,
     title: payload.title !== undefined ? payload.title.trim() : current.title,
     code: payload.code !== undefined ? payload.code.trim().toUpperCase() : current.code,
+    badge:
+      payload.badge !== undefined
+        ? payload.badge.trim().toUpperCase()
+        : current.badge || "LIMITED TIME",
     discountPercent:
       payload.discountPercent !== undefined
         ? Number(payload.discountPercent)

@@ -26,6 +26,7 @@ export default function OfferTopBanner({
   const [offer, setOffer] = useState({
     title,
     code,
+    badge,
     discountPercent,
     isActive: true,
   });
@@ -115,7 +116,7 @@ export default function OfferTopBanner({
           <div className="flex items-center gap-2.5 flex-1 min-w-[240px]">
             <span className="inline-flex items-center gap-1 bg-brand-accent/25 border border-brand-accent/40 text-[#d4e031] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0">
               <Sparkles size={12} className="text-brand-accent animate-spin-slow" />
-              {badge}
+              {offer.badge || badge}
             </span>
 
             <p className="font-medium text-white/95 truncate">

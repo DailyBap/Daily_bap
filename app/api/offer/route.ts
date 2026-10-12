@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const { title, code, discountPercent, isActive } = body;
+    const { title, code, badge, discountPercent, isActive } = body;
 
     if (!title || typeof title !== "string" || !title.trim()) {
       return NextResponse.json(
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     const updated = await saveOfferData({
       title: title.trim(),
       code: code.trim().toUpperCase(),
+      badge: badge ? badge.trim().toUpperCase() : "LIMITED TIME",
       discountPercent:
         discountPercent !== undefined ? Number(discountPercent) : 10,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
