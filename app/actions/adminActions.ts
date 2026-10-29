@@ -5,8 +5,14 @@
 import { db } from "@/lib/db";
 import { orders, offers, users, settings } from "@/lib/schema";
 import { eq, desc, sql } from "drizzle-orm";
-import { getClosureInfo, isDateClosed, type ClosureInfo } from "@/lib/storeStatus";
-import { todayIST, addDaysIST, diffDaysIST } from "@/lib/dateUtils";
+import { getClosureInfo } from "@/lib/storeStatus";
+import {
+  todayIST,
+  addDaysIST,
+  diffDaysIST,
+  isDateClosed,
+  type ClosureInfo,
+} from "@/lib/dateUtils";
 
 import { revalidatePath } from "next/cache";
 import { siteConfig } from "@/config/brand";
@@ -81,50 +87,50 @@ export async function toggleKitchenStatus(
     return { success: false, error: "Unauthorized" };
   }
 
-  try {
-    if (isClosed) {
-      if (!closureStart || !closureEnd) {
-        return {
-          success: false,
-          error: "Start and end dates are required for closure.",
-        };
-      }
+  if (isClosed) {
+    if (!closureStart || !closureEnd) {
+      return {
+        success: false,
+        error: "Start and end dates are required for closure.",
+      };
+    }
 
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(closureStart) || !dateRegex.test(closureEnd)) {
-        return {
-          success: false,
-          error: "Dates must be in valid YYYY-MM-DD format.",
-        };
-      }
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(closureStart) || !dateRegex.test(closureEnd)) {
+      return {
+        success: false,
+        error: "Dates must be in valid YYYY-MM-DD format.",
+      };
+    }
 
-      const today = todayIST();
-      const lengthDays = diffDaysIST(closureStart, closureEnd) + 1;
+    const today = todayIST();
+    const lengthDays = diffDaysIST(closureStart, closureEnd) + 1;
 
-      if (lengthDays < 1) {
-        return {
-          success: false,
-          error: "End date must be on or after start date.",
-        };
-      }
+    if (lengthDays < 1) {
+      return {
+        success: false,
+        error: "End date must be on or after start date.",
+      };
+    }
 
-      if (lengthDays > 14) {
-        return {
-          success: false,
-          error: "Closure period cannot exceed 14 days.",
-        };
-      }
+    if (lengthDays > 14) {
+      return {
+        success: false,
+        error: "Closure period cannot exceed 14 days.",
+      };
+    }
 
-      const daysUntilStart = diffDaysIST(today, closureStart);
-      if (daysUntilStart > 60) {
-        return {
-          success: false,
-          error: "Start date cannot be more than 60 days in the future.",
-        };
-      }
+    const daysUntilStart = diffDaysIST(today, closureStart);
+    if (daysUntilStart > 60) {
+      return {
+        success: false,
+        error: "Start date cannot be more than 60 days in the future.",
+      };
+    }
 
-      // If start is in the past, allow ONLY if it matches currently stored start date
-      if (daysUntilStart < 0) {
+    // If start is in the past, allow ONLY if it matches currently stored start date
+    if (daysUntilStart < 0) {
+      try {
         const currentStartRow = await db
           .select()
           .from(settings)
@@ -137,32 +143,41 @@ export async function toggleKitchenStatus(
             error: "Start date cannot be in the past for a new closure.",
           };
         }
-      }
-
-      const daysUntilEnd = diffDaysIST(today, closureEnd);
-      if (daysUntilEnd < 0) {
+      } catch (dbReadErr) {
+        console.error("[toggleKitchenStatus] Failed to check existing closure start date:", dbReadErr);
         return {
           success: false,
-          error: "End date cannot be in the past.",
+          error: "Start date cannot be in the past for a new closure.",
         };
       }
     }
 
-    // Storage write: single multi-row upsert statement (neon-http compatible)
-    const rows = isClosed
-      ? [
-          { key: "kitchen_closed", value: "true" },
-          { key: "kitchen_closed_start", value: closureStart! },
-          { key: "kitchen_closed_end", value: closureEnd! },
-          { key: "kitchen_closed_message", value: closureMessage?.trim() || "" },
-        ]
-      : [
-          { key: "kitchen_closed", value: "false" },
-          { key: "kitchen_closed_start", value: "" },
-          { key: "kitchen_closed_end", value: "" },
-          { key: "kitchen_closed_message", value: "" },
-        ];
+    const daysUntilEnd = diffDaysIST(today, closureEnd);
+    if (daysUntilEnd < 0) {
+      return {
+        success: false,
+        error: "End date cannot be in the past.",
+      };
+    }
+  }
 
+  // Storage write: single multi-row upsert statement (neon-http compatible)
+  const rows = isClosed
+    ? [
+        { key: "kitchen_closed", value: "true" },
+        { key: "kitchen_closed_start", value: closureStart! },
+        { key: "kitchen_closed_end", value: closureEnd! },
+        { key: "kitchen_closed_message", value: closureMessage?.trim() || "" },
+      ]
+    : [
+        { key: "kitchen_closed", value: "false" },
+        { key: "kitchen_closed_start", value: "" },
+        { key: "kitchen_closed_end", value: "" },
+        { key: "kitchen_closed_message", value: "" },
+      ];
+
+  // Isolated DB write
+  try {
     await db
       .insert(settings)
       .values(rows)
@@ -173,25 +188,33 @@ export async function toggleKitchenStatus(
           updatedAt: new Date(),
         },
       });
+  } catch (dbError) {
+    console.error("[toggleKitchenStatus] Database write failed:", dbError);
+    return {
+      success: false,
+      error: "Failed to update kitchen status in database. Please try again.",
+    };
+  }
 
+  // Isolated path revalidation: cache errors must never turn a successful DB write into an error
+  try {
     revalidatePath("/admin");
     revalidatePath("/");
-
-    const closureInfo: ClosureInfo | null = isClosed
-      ? {
-          active: true,
-          start: closureStart!,
-          end: closureEnd!,
-          message: closureMessage?.trim() || undefined,
-          reopenDate: addDaysIST(closureEnd!, 1),
-        }
-      : null;
-
-    return { success: true, isClosed, closureInfo };
-  } catch (error) {
-    console.error("[toggleKitchenStatus] Error updating kitchen status:", error);
-    return { success: false, error: "Failed to update kitchen status" };
+  } catch (revalError) {
+    console.warn("[toggleKitchenStatus] revalidatePath warning (non-fatal):", revalError);
   }
+
+  const closureInfo: ClosureInfo | null = isClosed
+    ? {
+        active: true,
+        start: closureStart!,
+        end: closureEnd!,
+        message: closureMessage?.trim() || undefined,
+        reopenDate: addDaysIST(closureEnd!, 1),
+      }
+    : null;
+
+  return { success: true, isClosed, closureInfo };
 }
 
 /**

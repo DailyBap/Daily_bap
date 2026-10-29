@@ -11,8 +11,7 @@ import {
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
 import AdminOfferSettings from "@/components/AdminOfferSettings";
-import type { ClosureInfo } from "@/lib/storeStatus";
-import { todayIST, formatDisplayDateIST } from "@/lib/dateUtils";
+import { todayIST, formatDisplayDateIST, type ClosureInfo } from "@/lib/dateUtils";
 import {
   getInfluencersAction,
   createInfluencerAction,
