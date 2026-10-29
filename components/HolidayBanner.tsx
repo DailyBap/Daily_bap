@@ -1,20 +1,75 @@
-// components/HolidayBanner.tsx — Announcement banner shown when kitchen is closed for holidays
+"use client";
 
-import { getKitchenStatus } from "@/app/actions/adminActions";
+// components/HolidayBanner.tsx — Announcement banner shown when kitchen has an active or scheduled closure
+import { usePathname } from "next/navigation";
+import type { ClosureInfo } from "@/lib/storeStatus";
+import {
+  todayIST,
+  formatDisplayDateIST,
+  diffDaysIST,
+} from "@/lib/dateUtils";
 
-export const revalidate = 0;
+interface HolidayBannerProps {
+  closureInfo: ClosureInfo | null;
+}
 
-export default async function HolidayBanner() {
-  const isClosed = await getKitchenStatus();
+export default function HolidayBanner({ closureInfo }: HolidayBannerProps) {
+  const pathname = usePathname();
 
-  if (!isClosed) return null;
+  // Hide on admin routes
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
+
+  // Hide if no active closure
+  if (!closureInfo || !closureInfo.active) {
+    return null;
+  }
+
+  const today = todayIST();
+  const { start, end, reopenDate, message } = closureInfo;
+
+  // Hide if closure has already expired
+  if (diffDaysIST(today, end) < 0) {
+    return null;
+  }
+
+  const isCurrentlyClosed = diffDaysIST(start, today) >= 0 && diffDaysIST(today, end) >= 0;
+  const isFutureClosure = diffDaysIST(today, start) > 0;
+
+  let bannerText = "";
+
+  if (isCurrentlyClosed) {
+    if (start === end) {
+      bannerText = `Our kitchen is closed today (${formatDisplayDateIST(start)}). Pre-orders for ${formatDisplayDateIST(reopenDate)} onward are open.`;
+    } else {
+      bannerText = `Our kitchen is closed from ${formatDisplayDateIST(start)} to ${formatDisplayDateIST(end)}. Pre-orders for ${formatDisplayDateIST(reopenDate)} onward are open.`;
+    }
+  } else if (isFutureClosure) {
+    if (start === end) {
+      bannerText = `Kitchen will be closed on ${formatDisplayDateIST(start)}. Orders for that date are unavailable.`;
+    } else {
+      bannerText = `Kitchen will be closed from ${formatDisplayDateIST(start)} to ${formatDisplayDateIST(end)}. Orders for those dates are unavailable.`;
+    }
+  } else {
+    return null;
+  }
+
+  if (message) {
+    bannerText += ` (${message})`;
+  }
 
   return (
-    <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white text-xs sm:text-sm font-semibold py-2.5 px-4 text-center shadow-md flex items-center justify-center gap-2">
-      <span className="shrink-0 text-base">🏖️</span>
-      <span>
-        <strong>Kitchen Closed Notice:</strong> We are currently closed today for holidays! Pre-orders are open for tomorrow&apos;s fresh deliveries. 🍱
+    <aside
+      aria-label="Holiday notice"
+      className="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white text-xs sm:text-sm font-semibold py-2.5 px-4 text-center shadow-md flex items-center justify-center gap-2"
+    >
+      <span className="shrink-0 text-base" aria-hidden="true">
+        🏖️
       </span>
-    </div>
+      <span>
+        <strong>Kitchen Notice:</strong> {bannerText} 🍱
+      </span>
+    </aside>
   );
 }

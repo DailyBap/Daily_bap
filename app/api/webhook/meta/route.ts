@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import { db } from "@/lib/db";
 import { orders, users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { assertOrderAllowed, getClosureInfo } from "@/lib/storeStatus";
 import {
   siteConfig,
   foodPrinciples,
@@ -154,9 +155,14 @@ export async function POST(req: Request) {
       // Filter out read receipts, echo messages, or payloads lacking text
       if (senderId && messageText && !isEcho && !isRead && !isDelivery) {
         // Step 2 & 3: AI SDK generateText with gemini-2.5-flash and place_order tool
+        const closureInfo = await getClosureInfo().catch(() => null);
+        const closureNote = closureInfo
+          ? `\n\n========================================\nCURRENT KITCHEN STATUS & CLOSURE NOTICE\n========================================\nOur kitchen is closed from ${closureInfo.start} to ${closureInfo.end}. We reopen on ${closureInfo.reopenDate}.\nDo not place orders for delivery during this closure period.${closureInfo.message ? ` Reason: ${closureInfo.message}` : ""}\n`
+          : "";
+
         const { text: generatedText } = await generateText({
           model: google("gemini-2.5-flash"),
-          system: systemPrompt,
+          system: systemPrompt + closureNote,
           prompt: messageText,
           maxSteps: 2,
           tools: {
@@ -184,6 +190,10 @@ export async function POST(req: Request) {
                 orderSummary,
               }) => {
                 try {
+                  const closureError = await assertOrderAllowed("ASAP (Meta DM Order)");
+                  if (closureError) {
+                    return `Order could not be placed: ${closureError}`;
+                  }
                   const cleanPhone =
                     whatsappNumber.replace(/\D/g, "") || "0000000000";
 
