@@ -101,6 +101,8 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
     const totalCommission = Math.max(0, Number(summary?.totalCommission) || 0);
     const netRevenue = Math.max(0, grossRevenue - totalCommission);
 
+    const grossSalesExpr = sql<number>`COALESCE(SUM(CASE WHEN ${orders.status} = 'delivered' THEN ${orders.totalAmount} ELSE 0 END), 0)::int`;
+
     // 2. Per-Creator Sales Breakdown (SQL Aggregation)
     const creatorBreakdownRaw = await db
       .select({
@@ -108,7 +110,7 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
         creatorName: influencers.name,
         creatorCode: influencers.code,
         deliveredOrders: sql<number>`COALESCE(COUNT(CASE WHEN ${orders.status} = 'delivered' THEN ${orders.id} END), 0)::int`,
-        grossSales: sql<number>`COALESCE(SUM(CASE WHEN ${orders.status} = 'delivered' THEN ${orders.totalAmount} ELSE 0 END), 0)::int`,
+        grossSales: grossSalesExpr,
         totalDiscount: sql<number>`COALESCE(SUM(CASE WHEN ${orders.status} = 'delivered' THEN ${orders.discountAmount} ELSE 0 END), 0)::int`,
         totalCommission: sql<number>`COALESCE(SUM(CASE WHEN ${orders.status} = 'delivered' THEN ${orders.commissionAmount} ELSE 0 END), 0)::int`,
         unpaidCommission: sql<number>`COALESCE(SUM(CASE WHEN ${orders.status} = 'delivered' AND ${orders.commissionPaid} = false THEN ${orders.commissionAmount} ELSE 0 END), 0)::int`,
@@ -118,8 +120,8 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
         orders,
         and(eq(orders.influencerId, influencers.id), istRangeCondition)
       )
-      .groupBy(influencers.id)
-      .orderBy(desc(sql`grossSales`));
+      .groupBy(influencers.id, influencers.name, influencers.code)
+      .orderBy(desc(grossSalesExpr));
 
     const sanitizedCreatorBreakdown: SalesBreakdownPerCreator[] = (
       creatorBreakdownRaw || []
@@ -135,16 +137,18 @@ export async function getSalesStatsAction(yearMonthIST?: string): Promise<SalesR
     }));
 
     // 3. Day-by-Day Revenue Chart Data (SQL Aggregation in IST)
+    const dateStrExpr = sql<string>`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')`;
+
     const dailyRaw = await db
       .select({
-        dateStr: sql<string>`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')`,
+        dateStr: dateStrExpr,
         deliveredOrders: sql<number>`COALESCE(COUNT(CASE WHEN ${orders.status} = 'delivered' THEN 1 END), 0)::int`,
         revenue: sql<number>`COALESCE(SUM(CASE WHEN ${orders.status} = 'delivered' THEN ${orders.totalAmount} ELSE 0 END), 0)::int`,
       })
       .from(orders)
       .where(istRangeCondition)
-      .groupBy(sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')`)
-      .orderBy(sql`dateStr`);
+      .groupBy(dateStrExpr)
+      .orderBy(dateStrExpr);
 
     const sanitizedDailyChartData: DayByDaySales[] = (dailyRaw || []).map((d) => ({
       dateStr: d.dateStr || "",

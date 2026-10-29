@@ -6,13 +6,15 @@ import { useCartStore } from "@/store/useCartStore";
 import { siteConfig } from "@/config/brand";
 import { validateCouponAction } from "@/app/actions/orderActions";
 import CheckoutForm from "./CheckoutForm";
+import type { ClosureInfo } from "@/lib/storeStatus";
 
 interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  closureInfo?: ClosureInfo | null;
 }
 
-export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
+export default function CartDrawer({ isOpen, onClose, closureInfo }: CartDrawerProps) {
   const {
     items,
     updateQuantity,
@@ -309,7 +311,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   <span>Proceed to Checkout (₹{total})</span>
                 </button>
               ) : (
-                <CheckoutForm />
+                <CheckoutForm closureInfo={closureInfo} />
               )}
             </>
           )}

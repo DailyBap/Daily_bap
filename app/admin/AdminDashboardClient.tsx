@@ -10,6 +10,9 @@ import {
   OrderStatus,
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
+import AdminOfferSettings from "@/components/AdminOfferSettings";
+import type { ClosureInfo } from "@/lib/storeStatus";
+import { todayIST, formatDisplayDateIST } from "@/lib/dateUtils";
 import {
   getInfluencersAction,
   createInfluencerAction,
@@ -106,6 +109,7 @@ interface AdminDashboardClientProps {
   initialOffers: OfferRecord[];
   initialInfluencers?: InfluencerWithStats[];
   initialSalesStats?: SalesReportStats | null;
+  initialClosureInfo?: ClosureInfo | null;
   initialKitchenClosed?: boolean;
   initialAutoReviewRequest?: boolean;
 }
@@ -155,6 +159,7 @@ export default function AdminDashboardClient({
   initialOffers,
   initialInfluencers = [],
   initialSalesStats = null,
+  initialClosureInfo = null,
   initialKitchenClosed = false,
   initialAutoReviewRequest = true,
 }: AdminDashboardClientProps) {
@@ -170,7 +175,13 @@ export default function AdminDashboardClient({
   const [influencersList, setInfluencersList] = useState<InfluencerWithStats[]>(initialInfluencers);
   const [salesStats, setSalesStats] = useState<SalesReportStats | null>(initialSalesStats);
 
-  const [isKitchenClosed, setIsKitchenClosed] = useState<boolean>(initialKitchenClosed);
+  const [closureInfo, setClosureInfo] = useState<ClosureInfo | null>(initialClosureInfo ?? null);
+  const isKitchenClosed = closureInfo !== null && closureInfo.active;
+  const [showClosureForm, setShowClosureForm] = useState(false);
+  const [closureStart, setClosureStart] = useState<string>(() => initialClosureInfo?.start || todayIST());
+  const [closureEnd, setClosureEnd] = useState<string>(() => initialClosureInfo?.end || todayIST());
+  const [closureMessage, setClosureMessage] = useState<string>(() => initialClosureInfo?.message || "");
+  const [closureFormError, setClosureFormError] = useState("");
   const [isAutoReviewActive, setIsAutoReviewActive] = useState<boolean>(initialAutoReviewRequest);
 
   // Month selector for analytics (YYYY-MM)
@@ -588,11 +599,37 @@ export default function AdminDashboardClient({
     });
   };
 
-  const handleToggleKitchenStatus = () => {
-    const nextState = !isKitchenClosed;
-    setIsKitchenClosed(nextState);
+  const handleOpenClosureForm = () => {
+    setClosureStart(closureInfo?.start || todayIST());
+    setClosureEnd(closureInfo?.end || todayIST());
+    setClosureMessage(closureInfo?.message || "");
+    setClosureFormError("");
+    setShowClosureForm(true);
+  };
+
+  const handleSaveClosure = () => {
+    setClosureFormError("");
     startTransition(async () => {
-      await toggleKitchenStatus(nextState);
+      const res = await toggleKitchenStatus(true, closureStart, closureEnd, closureMessage);
+      if (res.success && res.closureInfo) {
+        setClosureInfo(res.closureInfo);
+        setShowClosureForm(false);
+      } else {
+        setClosureFormError(res.error || "Failed to set holiday closure.");
+      }
+    });
+  };
+
+  const handleTurnKitchenOpen = () => {
+    setClosureFormError("");
+    startTransition(async () => {
+      const res = await toggleKitchenStatus(false);
+      if (res.success) {
+        setClosureInfo(null);
+        setShowClosureForm(false);
+      } else {
+        setClosureFormError(res.error || "Failed to turn kitchen open.");
+      }
     });
   };
 
@@ -631,74 +668,174 @@ export default function AdminDashboardClient({
       <div className="max-w-7xl mx-auto space-y-8">
         {/* OPERATIONAL STATUS & AUTO REVIEW TOGGLES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Kitchen Status */}
-          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
-              <div
-                className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
-                  isKitchenClosed
-                    ? "bg-rose-100 text-rose-700"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                {isKitchenClosed ? (
-                  <AlertCircle className="w-6 h-6" />
-                ) : (
-                  <CheckCircle2 className="w-6 h-6" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-display font-bold text-base text-gray-900 whitespace-normal break-words">
-                    Kitchen Status:{" "}
-                    <span
-                      className={
-                        isKitchenClosed ? "text-rose-600" : "text-emerald-700"
-                      }
-                    >
-                      {isKitchenClosed ? "CLOSED" : "OPEN"}
-                    </span>
-                  </h2>
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
-                      isKitchenClosed
-                        ? "bg-rose-100 text-rose-800 border border-rose-200"
-                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                    }`}
-                  >
-                    {isKitchenClosed ? "Holiday Mode" : "Normal Hours"}
-                  </span>
+          {/* Kitchen Status & Date Range Closure */}
+          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-5 sm:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                <div
+                  className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
+                    isKitchenClosed
+                      ? "bg-rose-100 text-rose-700"
+                      : "bg-emerald-100 text-emerald-700"
+                  }`}
+                >
+                  {isKitchenClosed ? (
+                    <AlertCircle className="w-6 h-6" />
+                  ) : (
+                    <CheckCircle2 className="w-6 h-6" />
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1 whitespace-normal break-words">
-                  {isKitchenClosed
-                    ? "Same-day ordering is disabled on the website."
-                    : "Kitchen accepting orders for Today & Tomorrow."}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-display font-bold text-base text-gray-900 whitespace-normal break-words">
+                      Kitchen Status:{" "}
+                      <span
+                        className={
+                          isKitchenClosed ? "text-rose-600" : "text-emerald-700"
+                        }
+                      >
+                        {isKitchenClosed ? "CLOSED" : "OPEN"}
+                      </span>
+                    </h2>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                        isKitchenClosed
+                          ? "bg-rose-100 text-rose-800 border border-rose-200"
+                          : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      }`}
+                    >
+                      {isKitchenClosed ? "Holiday Mode" : "Normal Hours"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 whitespace-normal break-words">
+                    {isKitchenClosed && closureInfo
+                      ? `Closed ${formatDisplayDateIST(closureInfo.start)} - ${formatDisplayDateIST(closureInfo.end)}. Reopens ${formatDisplayDateIST(closureInfo.reopenDate)}.${closureInfo.message ? ` (${closureInfo.message})` : ""}`
+                      : "Kitchen accepting orders for upcoming open days."}
+                  </p>
+                </div>
               </div>
+
+              {!showClosureForm && (
+                <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                  {isKitchenClosed ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={handleOpenClosureForm}
+                        className="px-3.5 py-2 rounded-xl font-bold text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 transition shadow-xs flex items-center gap-1.5"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={handleTurnKitchenOpen}
+                        className="px-4 py-2 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-xs flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Turn OPEN
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={handleOpenClosureForm}
+                      className="px-4 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white transition shadow-xs flex items-center gap-2"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      Holiday Mode
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={handleToggleKitchenStatus}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto ${
-                isKitchenClosed
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : "bg-rose-600 hover:bg-rose-700 text-white"
-              } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              {isKitchenClosed ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  Turn OPEN
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4" />
-                  Holiday Mode
-                </>
-              )}
-            </button>
+            {/* Inline Closure Form */}
+            {showClosureForm && (
+              <div className="mt-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-[#445916]" />
+                    Set Holiday Closure Period
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowClosureForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">
+                      Start Date (IST)
+                    </label>
+                    <input
+                      type="date"
+                      value={closureStart}
+                      onChange={(e) => setClosureStart(e.target.value)}
+                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#445916]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">
+                      End Date (Inclusive, IST)
+                    </label>
+                    <input
+                      type="date"
+                      value={closureEnd}
+                      onChange={(e) => setClosureEnd(e.target.value)}
+                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#445916]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-600 font-semibold text-xs mb-1">
+                    Customer Notice Message (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Closed for Bihu holidays"
+                    value={closureMessage}
+                    onChange={(e) => setClosureMessage(e.target.value)}
+                    className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#445916]"
+                  />
+                </div>
+
+                {closureFormError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2 font-medium">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{closureFormError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={handleSaveClosure}
+                    className="px-4 py-2 bg-[#445916] hover:bg-[#334311] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs disabled:opacity-60"
+                  >
+                    {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Save Closure
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => setShowClosureForm(false)}
+                    className="px-3.5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-semibold transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Review Ping (Task 3: Fixed Overflow & Wrapping) */}
@@ -1464,177 +1601,7 @@ export default function AdminDashboardClient({
         )}
 
         {/* TAB 4: OFFERS BANNER */}
-        {activeTab === "offers" && (
-          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 space-y-6">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-4">
-              <Tag className="w-5 h-5 text-brand-primary" />
-              <h2 className="font-display font-bold text-xl text-brand-primary">
-                Daily Offers Management
-              </h2>
-            </div>
-
-            {/* Create Offer Form */}
-            <form onSubmit={handleCreateOffer} className="space-y-4 max-w-xl">
-              <h3 className="font-bold text-sm text-gray-800">Create New Offer</h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Offer Title
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Free Kimchi Friday!"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-primary"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Promo Code
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. KIMCHI100"
-                    value={newCode}
-                    onChange={(e) => setNewCode(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-primary font-mono uppercase"
-                  />
-                </div>
-              </div>
-
-              {offerError && (
-                <p className="text-xs text-red-600 flex items-center gap-1 font-medium">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{offerError}</span>
-                </p>
-              )}
-
-              {offerSuccess && (
-                <p className="text-xs text-green-600 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>{offerSuccess}</span>
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isPending}
-                className="inline-flex items-center gap-1.5 bg-brand-primary hover:bg-brand-accent text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-xs"
-              >
-                <Plus className="w-4 h-4" />
-                Create Offer
-              </button>
-            </form>
-
-            {/* Offers List */}
-            <div className="pt-4 border-t border-gray-100 space-y-3">
-              <h3 className="font-bold text-sm text-gray-800">Existing Offers</h3>
-
-              {offersList.length === 0 ? (
-                <p className="text-xs text-gray-400">No offers created yet.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {offersList.map((offer) => (
-                    <div
-                      key={offer.id}
-                      className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 transition ${
-                        offer.isActive
-                          ? "bg-amber-50/60 border-amber-300"
-                          : "bg-gray-50 border-gray-200"
-                      }`}
-                    >
-                      {editingOfferId === offer.id ? (
-                        <div className="space-y-2">
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Title</label>
-                            <input
-                              type="text"
-                              value={editOfferTitle}
-                              onChange={(e) => setEditOfferTitle(e.target.value)}
-                              className="w-full border border-gray-300 rounded-lg px-2.5 py-1 text-xs outline-none focus:border-brand-primary font-bold"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Promo Code</label>
-                            <input
-                              type="text"
-                              value={editOfferCode}
-                              onChange={(e) => setEditOfferCode(e.target.value)}
-                              className="w-full border border-gray-300 rounded-lg px-2.5 py-1 text-xs outline-none focus:border-brand-primary font-mono font-bold uppercase"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => handleSaveOfferEdit(offer.id)}
-                              disabled={isPending}
-                              className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition"
-                            >
-                              <Check className="w-3.5 h-3.5" /> Save
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingOfferId(null)}
-                              className="inline-flex items-center justify-center gap-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1.5 px-3 rounded-lg text-xs transition"
-                            >
-                              <X className="w-3.5 h-3.5" /> Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-bold text-sm text-gray-900">
-                                {offer.title}
-                              </span>
-                              {offer.isActive ? (
-                                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0">
-                                  Active Banner
-                                </span>
-                              ) : (
-                                <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0">
-                                  Inactive
-                                </span>
-                              )}
-                            </div>
-                            <p className="font-mono text-xs text-brand-primary font-bold">
-                              Code: {offer.code}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleOffer(offer.id, offer.isActive)}
-                              className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
-                                offer.isActive
-                                  ? "bg-amber-600 hover:bg-amber-700 text-white"
-                                  : "bg-gray-200 hover:bg-gray-300 text-gray-800"
-                              }`}
-                            >
-                              {offer.isActive ? "Deactivate Offer" : "Set as Active Banner"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => startEditingOffer(offer)}
-                              className="inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-3 rounded-xl text-xs transition border border-gray-300"
-                            >
-                              <Edit className="w-3.5 h-3.5 text-gray-600" /> Edit
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
+        {activeTab === "offers" && <AdminOfferSettings />}
       </div>
 
       {/* MODAL 1: ADD NEW CREATOR */}

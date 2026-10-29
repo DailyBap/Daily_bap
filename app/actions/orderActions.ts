@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { users, orders } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
-import { getKitchenStatus } from "@/app/actions/adminActions";
+import { assertOrderAllowed } from "@/lib/storeStatus";
 import { calculateOrderTotals, validateCouponCode } from "@/lib/pricing";
 import { getClientIp } from "@/lib/adminAuth";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
@@ -111,14 +111,12 @@ export async function placeOrder(
       };
     }
 
-    if (deliverySlotLabel.startsWith("Today")) {
-      const isKitchenClosed = await getKitchenStatus();
-      if (isKitchenClosed) {
-        return {
-          success: false,
-          error: "Kitchen is currently closed for holidays. Please select a delivery slot for tomorrow.",
-        };
-      }
+    const closureError = await assertOrderAllowed(deliverySlotLabel);
+    if (closureError) {
+      return {
+        success: false,
+        error: closureError,
+      };
     }
 
     const valResult = validateDeliveryTimeSlot(

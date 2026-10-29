@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { ShoppingCart, Menu, X } from "lucide-react";
 import { useCartStore } from "@/store/useCartStore";
 import { siteConfig } from "@/config/brand";
+import OfferTopBanner from "@/components/OfferTopBanner";
 
 // Inline Instagram SVG (not in this lucide-react version)
 function InstagramIcon({ size = 18 }: { size?: number }) {
@@ -36,6 +37,7 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
 
   const navLinks = [
     { label: "Menu", href: "#menu" },
+    { label: "Combos", href: "#combos" },
     { label: "Our Story", href: "#story" },
     { label: "How It Works", href: "#how-it-works" },
     { label: "Order", href: "#order" },
@@ -43,6 +45,7 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-brand-primary/95 backdrop-blur-sm shadow-lg">
+      <OfferTopBanner />
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
