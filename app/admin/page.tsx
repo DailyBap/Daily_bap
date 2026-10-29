@@ -9,6 +9,7 @@ import { getOffers } from "@/app/actions/offerActions";
 import { getInfluencersAction } from "@/app/actions/influencerActions";
 import { getSalesStatsAction } from "@/app/actions/salesActions";
 import { getClosureInfo } from "@/lib/storeStatus";
+import type { ClosureInfo } from "@/lib/dateUtils";
 import AdminDashboardClient from "./AdminDashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -32,17 +33,23 @@ export default async function AdminPage() {
     );
   }
 
+  let initialClosureInfo: ClosureInfo | null = null;
+  try {
+    initialClosureInfo = await getClosureInfo();
+  } catch (error) {
+    console.error("[AdminPage] Error reading closure info:", error);
+    initialClosureInfo = null;
+  }
+
   const [
     initialOrders,
     initialOffers,
-    initialClosureInfo,
     initialAutoReviewRequest,
     initialInfluencers,
     initialSalesStats,
   ] = await Promise.all([
     getAllOrders(),
     getOffers(),
-    getClosureInfo().catch(() => null),
     getAutoReviewRequestStatus(),
     getInfluencersAction(),
     getSalesStatsAction(),

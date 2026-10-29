@@ -6,7 +6,7 @@ import { useCartStore } from "@/store/useCartStore";
 import { siteConfig } from "@/config/brand";
 import { validateCouponAction } from "@/app/actions/orderActions";
 import CheckoutForm from "./CheckoutForm";
-import type { ClosureInfo } from "@/lib/storeStatus";
+import type { ClosureInfo } from "@/lib/dateUtils";
 
 interface CartDrawerProps {
   isOpen: boolean;

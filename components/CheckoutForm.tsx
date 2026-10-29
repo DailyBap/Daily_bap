@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { User, Phone, MapPin, AlertCircle, Loader2, ShoppingBag, ShieldCheck } from "lucide-react";
 import dynamic from "next/dynamic";
 import DeliveryTimePicker from "./DeliveryTimePicker";
-import type { ClosureInfo } from "@/lib/storeStatus";
+import type { ClosureInfo } from "@/lib/dateUtils";
 
 const DeliveryMap = dynamic(() => import("./DeliveryMapClient"), {
   ssr: false,

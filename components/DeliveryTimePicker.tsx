@@ -9,8 +9,6 @@ import {
 } from "@/lib/deliverySlots";
 import { useCartStore } from "@/store/useCartStore";
 import { deliveryTimeConfig } from "@/config/brand";
-import type { ClosureInfo } from "@/lib/storeStatus";
-import { isDateClosed } from "@/lib/storeStatus";
 import {
   todayIST,
   tomorrowIST,
@@ -19,6 +17,8 @@ import {
   weekdayAbbrevIST,
   formatShortDateIST,
   formatDisplayDateIST,
+  isDateClosed,
+  type ClosureInfo,
 } from "@/lib/dateUtils";
 
 interface DeliveryTimePickerProps {

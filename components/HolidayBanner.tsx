@@ -2,11 +2,11 @@
 
 // components/HolidayBanner.tsx — Announcement banner shown when kitchen has an active or scheduled closure
 import { usePathname } from "next/navigation";
-import type { ClosureInfo } from "@/lib/storeStatus";
 import {
   todayIST,
   formatDisplayDateIST,
   diffDaysIST,
+  type ClosureInfo,
 } from "@/lib/dateUtils";
 
 interface HolidayBannerProps {

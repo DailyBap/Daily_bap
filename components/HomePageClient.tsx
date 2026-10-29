@@ -9,7 +9,7 @@ import ComboDealsSection from "@/components/ComboDealsSection";
 import SubscriptionWaitlist from "@/components/SubscriptionWaitlist";
 import CartDrawer from "@/components/CartDrawer";
 import Footer from "@/components/Footer";
-import type { ClosureInfo } from "@/lib/storeStatus";
+import type { ClosureInfo } from "@/lib/dateUtils";
 
 interface HomePageClientProps {
   closureInfo?: ClosureInfo | null;
