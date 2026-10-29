@@ -2,13 +2,13 @@
 
 import {
   getAllOrders,
-  getKitchenStatus,
   getAutoReviewRequestStatus,
   checkAdminSessionAction,
 } from "@/app/actions/adminActions";
 import { getOffers } from "@/app/actions/offerActions";
 import { getInfluencersAction } from "@/app/actions/influencerActions";
 import { getSalesStatsAction } from "@/app/actions/salesActions";
+import { getClosureInfo } from "@/lib/storeStatus";
 import AdminDashboardClient from "./AdminDashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,7 @@ export default async function AdminPage() {
         initialOffers={[]}
         initialInfluencers={[]}
         initialSalesStats={null}
+        initialClosureInfo={null}
         initialKitchenClosed={false}
         initialAutoReviewRequest={true}
       />
@@ -34,14 +35,14 @@ export default async function AdminPage() {
   const [
     initialOrders,
     initialOffers,
-    initialKitchenClosed,
+    initialClosureInfo,
     initialAutoReviewRequest,
     initialInfluencers,
     initialSalesStats,
   ] = await Promise.all([
     getAllOrders(),
     getOffers(),
-    getKitchenStatus(),
+    getClosureInfo().catch(() => null),
     getAutoReviewRequestStatus(),
     getInfluencersAction(),
     getSalesStatsAction(),
@@ -54,11 +55,9 @@ export default async function AdminPage() {
       initialOffers={initialOffers}
       initialInfluencers={initialInfluencers}
       initialSalesStats={initialSalesStats}
-      initialKitchenClosed={initialKitchenClosed}
+      initialClosureInfo={initialClosureInfo}
+      initialKitchenClosed={initialClosureInfo !== null}
       initialAutoReviewRequest={initialAutoReviewRequest}
     />
   );
 }
-
-
-

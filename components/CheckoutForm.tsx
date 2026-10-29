@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { User, Phone, MapPin, AlertCircle, Loader2, ShoppingBag, ShieldCheck } from "lucide-react";
 import dynamic from "next/dynamic";
 import DeliveryTimePicker from "./DeliveryTimePicker";
+import type { ClosureInfo } from "@/lib/storeStatus";
 
 const DeliveryMap = dynamic(() => import("./DeliveryMapClient"), {
   ssr: false,
@@ -19,7 +20,11 @@ const DeliveryMap = dynamic(() => import("./DeliveryMapClient"), {
   ),
 });
 
-export default function CheckoutForm() {
+interface CheckoutFormProps {
+  closureInfo?: ClosureInfo | null;
+}
+
+export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
   const router = useRouter();
   const customerInfo = useCartStore((s) => s.customerInfo);
   const setCustomerInfo = useCartStore((s) => s.setCustomerInfo);
@@ -221,7 +226,7 @@ export default function CheckoutForm() {
       </div>
 
       {/* Delivery Time Slot Scheduling */}
-      <DeliveryTimePicker error={errors.slot} />
+      <DeliveryTimePicker error={errors.slot} closureInfo={closureInfo ?? null} />
 
       {errors.submit && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-center gap-2 font-medium">

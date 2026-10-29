@@ -4,6 +4,8 @@ import "./globals.css";
 import { siteConfig } from "@/config/brand";
 import { ChatWidget } from "@/components/ChatWidget";
 import OfferBanner from "@/components/OfferBanner";
+import HolidayBanner from "@/components/HolidayBanner";
+import { getClosureInfo, ClosureInfo } from "@/lib/storeStatus";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -50,14 +52,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let closureInfo: ClosureInfo | null = null;
+  try {
+    closureInfo = await getClosureInfo();
+  } catch (error) {
+    // Graceful error handling: DB error must never crash the root layout
+    console.error("[RootLayout] Could not load store status:", error);
+  }
+
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable}`}>
       <body className="font-body antialiased bg-white text-gray-800">
+        <HolidayBanner closureInfo={closureInfo} />
         <OfferBanner />
         {children}
         <ChatWidget />

@@ -11,6 +11,8 @@ import {
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
 import AdminOfferSettings from "@/components/AdminOfferSettings";
+import type { ClosureInfo } from "@/lib/storeStatus";
+import { todayIST, formatDisplayDateIST } from "@/lib/dateUtils";
 import {
   getInfluencersAction,
   createInfluencerAction,
@@ -107,6 +109,7 @@ interface AdminDashboardClientProps {
   initialOffers: OfferRecord[];
   initialInfluencers?: InfluencerWithStats[];
   initialSalesStats?: SalesReportStats | null;
+  initialClosureInfo?: ClosureInfo | null;
   initialKitchenClosed?: boolean;
   initialAutoReviewRequest?: boolean;
 }
@@ -156,6 +159,7 @@ export default function AdminDashboardClient({
   initialOffers,
   initialInfluencers = [],
   initialSalesStats = null,
+  initialClosureInfo = null,
   initialKitchenClosed = false,
   initialAutoReviewRequest = true,
 }: AdminDashboardClientProps) {
@@ -171,7 +175,13 @@ export default function AdminDashboardClient({
   const [influencersList, setInfluencersList] = useState<InfluencerWithStats[]>(initialInfluencers);
   const [salesStats, setSalesStats] = useState<SalesReportStats | null>(initialSalesStats);
 
-  const [isKitchenClosed, setIsKitchenClosed] = useState<boolean>(initialKitchenClosed);
+  const [closureInfo, setClosureInfo] = useState<ClosureInfo | null>(initialClosureInfo ?? null);
+  const isKitchenClosed = closureInfo !== null && closureInfo.active;
+  const [showClosureForm, setShowClosureForm] = useState(false);
+  const [closureStart, setClosureStart] = useState<string>(() => initialClosureInfo?.start || todayIST());
+  const [closureEnd, setClosureEnd] = useState<string>(() => initialClosureInfo?.end || todayIST());
+  const [closureMessage, setClosureMessage] = useState<string>(() => initialClosureInfo?.message || "");
+  const [closureFormError, setClosureFormError] = useState("");
   const [isAutoReviewActive, setIsAutoReviewActive] = useState<boolean>(initialAutoReviewRequest);
 
   // Month selector for analytics (YYYY-MM)
@@ -589,11 +599,37 @@ export default function AdminDashboardClient({
     });
   };
 
-  const handleToggleKitchenStatus = () => {
-    const nextState = !isKitchenClosed;
-    setIsKitchenClosed(nextState);
+  const handleOpenClosureForm = () => {
+    setClosureStart(closureInfo?.start || todayIST());
+    setClosureEnd(closureInfo?.end || todayIST());
+    setClosureMessage(closureInfo?.message || "");
+    setClosureFormError("");
+    setShowClosureForm(true);
+  };
+
+  const handleSaveClosure = () => {
+    setClosureFormError("");
     startTransition(async () => {
-      await toggleKitchenStatus(nextState);
+      const res = await toggleKitchenStatus(true, closureStart, closureEnd, closureMessage);
+      if (res.success && res.closureInfo) {
+        setClosureInfo(res.closureInfo);
+        setShowClosureForm(false);
+      } else {
+        setClosureFormError(res.error || "Failed to set holiday closure.");
+      }
+    });
+  };
+
+  const handleTurnKitchenOpen = () => {
+    setClosureFormError("");
+    startTransition(async () => {
+      const res = await toggleKitchenStatus(false);
+      if (res.success) {
+        setClosureInfo(null);
+        setShowClosureForm(false);
+      } else {
+        setClosureFormError(res.error || "Failed to turn kitchen open.");
+      }
     });
   };
 
@@ -632,74 +668,174 @@ export default function AdminDashboardClient({
       <div className="max-w-7xl mx-auto space-y-8">
         {/* OPERATIONAL STATUS & AUTO REVIEW TOGGLES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Kitchen Status */}
-          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
-              <div
-                className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
-                  isKitchenClosed
-                    ? "bg-rose-100 text-rose-700"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                {isKitchenClosed ? (
-                  <AlertCircle className="w-6 h-6" />
-                ) : (
-                  <CheckCircle2 className="w-6 h-6" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-display font-bold text-base text-gray-900 whitespace-normal break-words">
-                    Kitchen Status:{" "}
-                    <span
-                      className={
-                        isKitchenClosed ? "text-rose-600" : "text-emerald-700"
-                      }
-                    >
-                      {isKitchenClosed ? "CLOSED" : "OPEN"}
-                    </span>
-                  </h2>
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
-                      isKitchenClosed
-                        ? "bg-rose-100 text-rose-800 border border-rose-200"
-                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                    }`}
-                  >
-                    {isKitchenClosed ? "Holiday Mode" : "Normal Hours"}
-                  </span>
+          {/* Kitchen Status & Date Range Closure */}
+          <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-5 sm:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                <div
+                  className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
+                    isKitchenClosed
+                      ? "bg-rose-100 text-rose-700"
+                      : "bg-emerald-100 text-emerald-700"
+                  }`}
+                >
+                  {isKitchenClosed ? (
+                    <AlertCircle className="w-6 h-6" />
+                  ) : (
+                    <CheckCircle2 className="w-6 h-6" />
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1 whitespace-normal break-words">
-                  {isKitchenClosed
-                    ? "Same-day ordering is disabled on the website."
-                    : "Kitchen accepting orders for Today & Tomorrow."}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-display font-bold text-base text-gray-900 whitespace-normal break-words">
+                      Kitchen Status:{" "}
+                      <span
+                        className={
+                          isKitchenClosed ? "text-rose-600" : "text-emerald-700"
+                        }
+                      >
+                        {isKitchenClosed ? "CLOSED" : "OPEN"}
+                      </span>
+                    </h2>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                        isKitchenClosed
+                          ? "bg-rose-100 text-rose-800 border border-rose-200"
+                          : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      }`}
+                    >
+                      {isKitchenClosed ? "Holiday Mode" : "Normal Hours"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 whitespace-normal break-words">
+                    {isKitchenClosed && closureInfo
+                      ? `Closed ${formatDisplayDateIST(closureInfo.start)} - ${formatDisplayDateIST(closureInfo.end)}. Reopens ${formatDisplayDateIST(closureInfo.reopenDate)}.${closureInfo.message ? ` (${closureInfo.message})` : ""}`
+                      : "Kitchen accepting orders for upcoming open days."}
+                  </p>
+                </div>
               </div>
+
+              {!showClosureForm && (
+                <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                  {isKitchenClosed ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={handleOpenClosureForm}
+                        className="px-3.5 py-2 rounded-xl font-bold text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 transition shadow-xs flex items-center gap-1.5"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={handleTurnKitchenOpen}
+                        className="px-4 py-2 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-xs flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Turn OPEN
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={handleOpenClosureForm}
+                      className="px-4 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white transition shadow-xs flex items-center gap-2"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      Holiday Mode
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={handleToggleKitchenStatus}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto ${
-                isKitchenClosed
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : "bg-rose-600 hover:bg-rose-700 text-white"
-              } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              {isKitchenClosed ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  Turn OPEN
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4" />
-                  Holiday Mode
-                </>
-              )}
-            </button>
+            {/* Inline Closure Form */}
+            {showClosureForm && (
+              <div className="mt-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-[#445916]" />
+                    Set Holiday Closure Period
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowClosureForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">
+                      Start Date (IST)
+                    </label>
+                    <input
+                      type="date"
+                      value={closureStart}
+                      onChange={(e) => setClosureStart(e.target.value)}
+                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#445916]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">
+                      End Date (Inclusive, IST)
+                    </label>
+                    <input
+                      type="date"
+                      value={closureEnd}
+                      onChange={(e) => setClosureEnd(e.target.value)}
+                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#445916]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-600 font-semibold text-xs mb-1">
+                    Customer Notice Message (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Closed for Bihu holidays"
+                    value={closureMessage}
+                    onChange={(e) => setClosureMessage(e.target.value)}
+                    className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#445916]"
+                  />
+                </div>
+
+                {closureFormError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2 font-medium">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{closureFormError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={handleSaveClosure}
+                    className="px-4 py-2 bg-[#445916] hover:bg-[#334311] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs disabled:opacity-60"
+                  >
+                    {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Save Closure
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => setShowClosureForm(false)}
+                    className="px-3.5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-semibold transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Review Ping (Task 3: Fixed Overflow & Wrapping) */}

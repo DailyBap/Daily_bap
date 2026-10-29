@@ -4,7 +4,10 @@
 
 import { db } from "@/lib/db";
 import { orders, offers, users, settings } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
+import { getClosureInfo, isDateClosed, type ClosureInfo } from "@/lib/storeStatus";
+import { todayIST, addDaysIST, diffDaysIST } from "@/lib/dateUtils";
+
 import { revalidatePath } from "next/cache";
 import { siteConfig } from "@/config/brand";
 import {
@@ -51,13 +54,8 @@ export async function checkAdminSessionAction(): Promise<boolean> {
  */
 export async function getKitchenStatus(): Promise<boolean> {
   try {
-    const result = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.key, "kitchen_closed"))
-      .limit(1);
-
-    return result[0]?.value === "true";
+    const info = await getClosureInfo();
+    return info !== null && isDateClosed(todayIST(), info);
   } catch (error) {
     console.error("[getKitchenStatus] Error fetching kitchen status:", error);
     return false;
@@ -65,37 +63,131 @@ export async function getKitchenStatus(): Promise<boolean> {
 }
 
 /**
- * Toggle kitchen closed status (Holiday Mode). Requires Admin Auth.
+ * Toggle kitchen closed status with date range support (Holiday Mode). Requires Admin Auth.
+ * Storage write: single multi-row upsert statement (neon-http compatible).
  */
-export async function toggleKitchenStatus(isClosed: boolean) {
+export async function toggleKitchenStatus(
+  isClosed: boolean,
+  closureStart?: string,
+  closureEnd?: string,
+  closureMessage?: string
+): Promise<{
+  success: boolean;
+  isClosed?: boolean;
+  closureInfo?: ClosureInfo | null;
+  error?: string;
+}> {
   if (!(await verifyAdminSession())) {
     return { success: false, error: "Unauthorized" };
   }
 
   try {
-    const value = isClosed ? "true" : "false";
+    if (isClosed) {
+      if (!closureStart || !closureEnd) {
+        return {
+          success: false,
+          error: "Start and end dates are required for closure.",
+        };
+      }
 
-    const existing = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.key, "kitchen_closed"))
-      .limit(1);
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(closureStart) || !dateRegex.test(closureEnd)) {
+        return {
+          success: false,
+          error: "Dates must be in valid YYYY-MM-DD format.",
+        };
+      }
 
-    if (existing.length > 0) {
-      await db
-        .update(settings)
-        .set({ value, updatedAt: new Date() })
-        .where(eq(settings.key, "kitchen_closed"));
-    } else {
-      await db.insert(settings).values({
-        key: "kitchen_closed",
-        value,
-      });
+      const today = todayIST();
+      const lengthDays = diffDaysIST(closureStart, closureEnd) + 1;
+
+      if (lengthDays < 1) {
+        return {
+          success: false,
+          error: "End date must be on or after start date.",
+        };
+      }
+
+      if (lengthDays > 14) {
+        return {
+          success: false,
+          error: "Closure period cannot exceed 14 days.",
+        };
+      }
+
+      const daysUntilStart = diffDaysIST(today, closureStart);
+      if (daysUntilStart > 60) {
+        return {
+          success: false,
+          error: "Start date cannot be more than 60 days in the future.",
+        };
+      }
+
+      // If start is in the past, allow ONLY if it matches currently stored start date
+      if (daysUntilStart < 0) {
+        const currentStartRow = await db
+          .select()
+          .from(settings)
+          .where(eq(settings.key, "kitchen_closed_start"))
+          .limit(1);
+        const storedStart = currentStartRow[0]?.value?.trim();
+        if (storedStart !== closureStart) {
+          return {
+            success: false,
+            error: "Start date cannot be in the past for a new closure.",
+          };
+        }
+      }
+
+      const daysUntilEnd = diffDaysIST(today, closureEnd);
+      if (daysUntilEnd < 0) {
+        return {
+          success: false,
+          error: "End date cannot be in the past.",
+        };
+      }
     }
+
+    // Storage write: single multi-row upsert statement (neon-http compatible)
+    const rows = isClosed
+      ? [
+          { key: "kitchen_closed", value: "true" },
+          { key: "kitchen_closed_start", value: closureStart! },
+          { key: "kitchen_closed_end", value: closureEnd! },
+          { key: "kitchen_closed_message", value: closureMessage?.trim() || "" },
+        ]
+      : [
+          { key: "kitchen_closed", value: "false" },
+          { key: "kitchen_closed_start", value: "" },
+          { key: "kitchen_closed_end", value: "" },
+          { key: "kitchen_closed_message", value: "" },
+        ];
+
+    await db
+      .insert(settings)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: {
+          value: sql`excluded.value`,
+          updatedAt: new Date(),
+        },
+      });
 
     revalidatePath("/admin");
     revalidatePath("/");
-    return { success: true, isClosed };
+
+    const closureInfo: ClosureInfo | null = isClosed
+      ? {
+          active: true,
+          start: closureStart!,
+          end: closureEnd!,
+          message: closureMessage?.trim() || undefined,
+          reopenDate: addDaysIST(closureEnd!, 1),
+        }
+      : null;
+
+    return { success: true, isClosed, closureInfo };
   } catch (error) {
     console.error("[toggleKitchenStatus] Error updating kitchen status:", error);
     return { success: false, error: "Failed to update kitchen status" };

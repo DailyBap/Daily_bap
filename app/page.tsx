@@ -1,15 +1,19 @@
-import OfferBanner from "@/components/OfferBanner";
-import HolidayBanner from "@/components/HolidayBanner";
 import HomePageClient from "@/components/HomePageClient";
+import { getClosureInfo, ClosureInfo } from "@/lib/storeStatus";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default async function HomePage() {
+  let closureInfo: ClosureInfo | null = null;
+  try {
+    closureInfo = await getClosureInfo();
+  } catch (error) {
+    console.error("[HomePage] Failed to fetch closure info:", error);
+  }
+
   return (
     <main>
-      <HolidayBanner />
-      <OfferBanner />
-      <HomePageClient />
+      <HomePageClient closureInfo={closureInfo} />
     </main>
   );
 }

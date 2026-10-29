@@ -19,7 +19,7 @@ import { db } from "@/lib/db";
 import { users, orders, chatSessions } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { calculateOrderTotals } from "@/lib/pricing";
-import { getKitchenStatus } from "@/app/actions/adminActions";
+import { getClosureInfo, assertOrderAllowed } from "@/lib/storeStatus";
 import { sendTelegramOrderNotification } from "@/lib/telegram";
 import { eq } from "drizzle-orm";
 import type { CartItem, CustomerInfo } from "@/types";
@@ -153,13 +153,20 @@ export async function POST(req: Request) {
   try {
     const { messages, sessionId, userPhone } = await req.json();
 
+    const closureInfo = await getClosureInfo().catch(() => null);
+    const closureNote = closureInfo
+      ? `\n\n========================================\nCURRENT KITCHEN STATUS & CLOSURE NOTICE\n========================================\nOur kitchen is closed from ${closureInfo.start} to ${closureInfo.end}. We reopen on ${closureInfo.reopenDate}.\nOrders for delivery dates between ${closureInfo.start} and ${closureInfo.end} CANNOT be accepted. You must inform customers of this closure period and invite them to place pre-orders for delivery on ${closureInfo.reopenDate} or later.${closureInfo.message ? ` Custom notice: ${closureInfo.message}` : ""}\n`
+      : "";
+
+    const dynamicSystemPrompt = systemPrompt + closureNote;
+
     if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       console.error("🚨 API ROUTE FATAL ERROR 🚨: GOOGLE_GENERATIVE_AI_API_KEY is not defined in environment variables!");
     }
 
     const result = streamText({
       model: google("gemini-3.6-flash"),
-      system: systemPrompt,
+      system: dynamicSystemPrompt,
       messages,
       maxSteps: 5,
       onError: ({ error }) => {
@@ -246,15 +253,13 @@ export async function POST(req: Request) {
             try {
               const slotLabel = deliverySlotLabel || "ASAP (Today, ~75 mins)";
 
-              // 1. Holiday Mode Check
-              if (slotLabel.startsWith("Today") || slotLabel.startsWith("ASAP")) {
-                const isKitchenClosed = await getKitchenStatus();
-                if (isKitchenClosed) {
-                  return {
-                    success: false,
-                    error: "Kitchen is currently closed for holidays. Please select a delivery slot for tomorrow.",
-                  };
-                }
+              // 1. Holiday Mode / Date Range Closure Check
+              const closureError = await assertOrderAllowed(slotLabel);
+              if (closureError) {
+                return {
+                  success: false,
+                  error: closureError,
+                };
               }
 
               // 2. Server-Authoritative Pricing, Discount, Commission & Delivery Fee Calculation
