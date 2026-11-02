@@ -189,10 +189,22 @@ export async function toggleKitchenStatus(
         },
       });
   } catch (dbError) {
-    console.error("[toggleKitchenStatus] Database write failed:", dbError);
+    const errorObj = dbError instanceof Error ? dbError : new Error(String(dbError));
+    const errorCode = (dbError as any)?.code || (dbError as any)?.cause?.code;
+    console.error("[toggleKitchenStatus] Database write failed:", {
+      message: errorObj.message,
+      code: errorCode,
+      stack: errorObj.stack,
+    });
+
+    const shortReason =
+      (dbError as any)?.cause?.message ||
+      errorObj.message ||
+      "Unknown database error";
+
     return {
       success: false,
-      error: "Failed to update kitchen status in database. Please try again.",
+      error: `Failed to update kitchen status in database: ${shortReason}`,
     };
   }
 
