@@ -4,6 +4,14 @@ import { persist } from "zustand/middleware";
 import type { CartItem, CustomerInfo } from "@/types";
 import { calculateDeliveryFee } from "@/lib/geo";
 
+export interface HuntVoucherState {
+  code: string;
+  expiresAt: string;
+  label: string;
+  offerType?: string;
+  discountPercent?: number;
+}
+
 interface CartState {
   // Cart items
   items: CartItem[];
@@ -23,6 +31,9 @@ interface CartState {
   couponCode: string | null;
   discountPercent: number;
 
+  // Additive QR Treasure Hunt voucher state
+  huntVoucher?: HuntVoucherState | null;
+
   // Actions
   addItem: (item: Omit<CartItem, "quantity">) => void;
   removeItem: (id: string) => void;
@@ -32,6 +43,7 @@ interface CartState {
   setDeliverable: (value: boolean, distanceKm?: number | null) => void;
   setDeliverySlot: (time: Date | string | null, label: string | null) => void;
   setCoupon: (code: string | null, discountPercent?: number) => void;
+  setHuntVoucher: (voucher: HuntVoucherState | null) => void;
   clearCoupon: () => void;
 
   // Computed (as functions to avoid stale state)
@@ -43,8 +55,19 @@ interface CartState {
   getTotalItems: () => number;
 }
 
+export interface PersistedCartState {
+  items: CartItem[];
+  customerInfo: CustomerInfo;
+  distanceKm: number | null;
+  requestedDeliveryTime: string | null;
+  deliverySlotLabel: string | null;
+  couponCode: string | null;
+  discountPercent: number;
+  huntVoucher?: HuntVoucherState | null;
+}
+
 export const useCartStore = create<CartState>()(
-  persist(
+  persist<CartState, [], [], PersistedCartState>(
     (set, get) => ({
       items: [],
       customerInfo: { name: "", phone: "", address: "" },
@@ -56,6 +79,7 @@ export const useCartStore = create<CartState>()(
       // Default coupon state
       couponCode: null,
       discountPercent: 0,
+      huntVoucher: null,
 
       addItem: (newItem) =>
         set((state) => {
@@ -95,6 +119,7 @@ export const useCartStore = create<CartState>()(
           deliverySlotLabel: null,
           couponCode: null,
           discountPercent: 0,
+          huntVoucher: null,
         }),
 
       setCustomerInfo: (info) =>
@@ -113,15 +138,24 @@ export const useCartStore = create<CartState>()(
         }),
 
       setCoupon: (code, discountPercent = 10) =>
-        set({
+        set((state) => ({
           couponCode: code ? code.toUpperCase() : null,
           discountPercent: code ? discountPercent : 0,
+          huntVoucher: code ? state.huntVoucher : null,
+        })),
+
+      setHuntVoucher: (voucher) =>
+        set({
+          huntVoucher: voucher,
+          couponCode: voucher ? voucher.code : null,
+          discountPercent: voucher ? (voucher.discountPercent || 0) : 0,
         }),
 
       clearCoupon: () =>
         set({
           couponCode: null,
           discountPercent: 0,
+          huntVoucher: null,
         }),
 
       getSubtotal: () => {
@@ -130,9 +164,41 @@ export const useCartStore = create<CartState>()(
       },
 
       getDiscountAmount: () => {
-        const { couponCode, discountPercent } = get();
-        if (!couponCode || discountPercent <= 0) return 0;
+        const { couponCode, discountPercent, huntVoucher, items } = get();
+        if (!couponCode) return 0;
+
         const subtotal = get().getSubtotal();
+
+        // Calculate preview discount for hunt vouchers
+        if (huntVoucher) {
+          if (huntVoucher.offerType === "PERCENT_OFF" || discountPercent > 0) {
+            return Math.round((subtotal * (discountPercent || 10)) / 100);
+          }
+          if (huntVoucher.offerType === "BOGO") {
+            const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
+            if (totalUnits < 2) return 0;
+            return Math.min(...items.map((i) => i.price));
+          }
+          if (huntVoucher.offerType === "FREE_MEAL") {
+            const meals = items.filter(
+              (i) => i.id?.includes("bento") || i.id?.includes("bowl")
+            );
+            if (meals.length === 0) return 0;
+            return Math.min(...meals.map((i) => i.price));
+          }
+          if (huntVoucher.offerType === "FREE_SIDE") {
+            const sides = items.filter(
+              (i) =>
+                i.id === "kimchi" ||
+                i.id === "cucumber-salad" ||
+                i.id === "pickled-radish"
+            );
+            if (sides.length === 0) return 0;
+            return Math.min(...sides.map((i) => i.price));
+          }
+        }
+
+        if (discountPercent <= 0) return 0;
         return Math.round((subtotal * discountPercent) / 100);
       },
 
@@ -160,17 +226,23 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "daily-bap-cart",
-      version: 2,
+      version: 3,
       migrate: (persistedState: any, version: number) => {
+        let state = persistedState;
         if (version < 2) {
-          // Upgrade version 1 cart state cleanly with default coupon fields
-          return {
-            ...persistedState,
+          state = {
+            ...state,
             couponCode: null,
             discountPercent: 0,
           };
         }
-        return persistedState as CartState;
+        if (version < 3) {
+          state = {
+            ...state,
+            huntVoucher: null,
+          };
+        }
+        return state as CartState;
       },
       partialize: (state) => ({
         items: state.items,
@@ -180,6 +252,7 @@ export const useCartStore = create<CartState>()(
         deliverySlotLabel: state.deliverySlotLabel,
         couponCode: state.couponCode,
         discountPercent: state.discountPercent,
+        huntVoucher: state.huntVoucher,
       }),
     }
   )

@@ -161,7 +161,11 @@ export async function GET() {
         totalAmount: o.totalAmount,
         discountAmount: o.discountAmount || 0,
         commissionAmount: o.commissionAmount || 0,
-        payoutStatus: o.commissionPaid ? "Paid" : "Unpaid",
+        payoutStatus: o.couponCode?.startsWith("HUNT-")
+          ? "N/A (Treasure Hunt)"
+          : o.commissionPaid
+          ? "Paid"
+          : "Unpaid",
         deliveryAddress: sanitizeExcelValue(o.deliveryAddress || "—"),
       });
     }
