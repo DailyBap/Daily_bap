@@ -2,6 +2,7 @@ import HomePageClient from "@/components/HomePageClient";
 import { getClosureInfo, ClosureInfo } from "@/lib/storeStatus";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export default async function HomePage() {
   let closureInfo: ClosureInfo | null = null;

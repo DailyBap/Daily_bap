@@ -22,8 +22,8 @@ export interface TelegramOrderNotificationData {
 export async function sendTelegramOrderNotification(
   data: TelegramOrderNotificationData
 ): Promise<boolean> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
 
   if (!botToken || !chatId) {
     // Telegram credentials not configured; skip silently in development
@@ -80,6 +80,7 @@ export async function sendTelegramOrderNotification(
           parse_mode: "HTML",
           disable_web_page_preview: true,
         }),
+        signal: AbortSignal.timeout(3000),
       }
     );
 

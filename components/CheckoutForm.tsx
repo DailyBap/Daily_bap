@@ -2,11 +2,11 @@
 
 import { useCartStore } from "@/store/useCartStore";
 import { placeOrder } from "@/app/actions/orderActions";
-import { validatePhone } from "@/lib/whatsapp";
+import { validatePhone, generateWhatsAppLink } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { User, Phone, MapPin, AlertCircle, Loader2, ShoppingBag, ShieldCheck } from "lucide-react";
+import { User, Phone, MapPin, AlertCircle, Loader2, ShoppingBag, ShieldCheck, MessageCircle } from "lucide-react";
 import dynamic from "next/dynamic";
 import DeliveryTimePicker from "./DeliveryTimePicker";
 import type { ClosureInfo } from "@/lib/dateUtils";
@@ -38,6 +38,7 @@ export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
   const deliverySlotLabel = useCartStore((s) => s.deliverySlotLabel);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [fallbackWaUrl, setFallbackWaUrl] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const total = getTotal();
@@ -101,6 +102,27 @@ export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
           setErrors({
             submit:
               "Your treasure hunt voucher has expired or was already claimed. The voucher has been removed from your cart. Please review your updated total and submit your order.",
+          });
+        } else if (res?.fallback) {
+          // Failsafe: Provide instant pre-filled WhatsApp ordering button
+          const waUrl =
+            res.whatsappUrl ||
+            generateWhatsAppLink(
+              items,
+              customerInfo,
+              getSubtotal(),
+              getDeliveryFee(),
+              deliverySlotLabel,
+              null,
+              orderNumber,
+              useCartStore.getState().couponCode,
+              useCartStore.getState().getDiscountAmount()
+            );
+          setFallbackWaUrl(waUrl);
+          setErrors({
+            submit:
+              res.error ||
+              "We couldn't place your order. Please try again or contact us on WhatsApp.",
           });
         } else if (res?.error) {
           setErrors({ submit: res.error });
@@ -236,9 +258,23 @@ export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
       <DeliveryTimePicker error={errors.slot} closureInfo={closureInfo ?? null} />
 
       {errors.submit && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-center gap-2 font-medium">
-          <AlertCircle size={16} className="shrink-0" />
-          <span>{errors.submit}</span>
+        <div className="space-y-3">
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-center gap-2 font-medium">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{errors.submit}</span>
+          </div>
+
+          {fallbackWaUrl && (
+            <a
+              href={fallbackWaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 rounded-2xl text-sm transition-all shadow-md active:scale-[0.99]"
+            >
+              <MessageCircle size={18} />
+              <span>Send order on WhatsApp</span>
+            </a>
+          )}
         </div>
       )}
 
