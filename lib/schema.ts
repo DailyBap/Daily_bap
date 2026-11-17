@@ -114,6 +114,7 @@ export const orders = pgTable(
     index("idx_orders_created_at").on(table.createdAt),
     index("idx_orders_influencer_id").on(table.influencerId),
     index("idx_orders_hunt_claim_id").on(table.huntClaimId),
+    unique("idx_orders_order_number_unique").on(table.orderNumber),
   ]
 );
 

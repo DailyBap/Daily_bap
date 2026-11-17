@@ -344,6 +344,139 @@ export function validateDeliveryTimeSlot(
   return { valid: false, reason: "Please select a valid delivery time slot." };
 }
 
+/**
+ * Converts a delivery slot label (e.g. "Today, 12:00 PM", "Tomorrow, 12:00 PM",
+ * "Sat, 09 Nov, 12:00 PM", or an ISO string) to an authoritative UTC Date object
+ * representing that exact moment in Asia/Kolkata (IST, UTC+5:30).
+ *
+ * Validates:
+ * - Parsing success (never falls back to new Date() silently)
+ * - Future validity: rejects slots in the past
+ * - Lead time for Today: rejects slots earlier than now + 45m prep + 30m delivery (75m total, 5m tolerance)
+ */
+export function parseSlotLabelToUTC(
+  slotLabel: string | Date | null | undefined,
+  referenceDate: Date = new Date()
+): { valid: boolean; date?: Date; reason?: string } {
+  if (!slotLabel) {
+    return { valid: false, reason: "Please select a delivery time slot." };
+  }
+
+  // If already a valid Date object
+  if (slotLabel instanceof Date) {
+    if (!isNaN(slotLabel.getTime())) {
+      if (slotLabel.getTime() < referenceDate.getTime()) {
+        return { valid: false, reason: "Selected delivery slot is in the past." };
+      }
+      return { valid: true, date: slotLabel };
+    }
+    return { valid: false, reason: "Invalid delivery time slot." };
+  }
+
+  const str = slotLabel.trim();
+
+  // If valid ISO string with timezone
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      if (d.getTime() < referenceDate.getTime()) {
+        return { valid: false, reason: "Selected delivery slot is in the past." };
+      }
+      return { valid: true, date: d };
+    }
+  }
+
+  const today = todayIST(referenceDate);
+  const tomorrow = tomorrowIST(referenceDate);
+
+  const extractTime = (text: string): { hour: number; minute: number } | null => {
+    const m = text.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    const ampm = m[3].toUpperCase();
+    if (ampm === "PM" && h < 12) h += 12;
+    if (ampm === "AM" && h === 12) h = 0;
+    return { hour: h, minute: min };
+  };
+
+  // Case 1: "Today, HH:MM AM/PM"
+  if (str.startsWith("Today,")) {
+    const t = extractTime(str);
+    if (!t) return { valid: false, reason: "Invalid time format in selected delivery slot." };
+    const hh = String(t.hour).padStart(2, "0");
+    const mm = String(t.minute).padStart(2, "0");
+    // IST is UTC+05:30
+    const istIso = `${today}T${hh}:${mm}:00+05:30`;
+    const dt = new Date(istIso);
+    if (isNaN(dt.getTime())) return { valid: false, reason: "Failed to parse delivery slot date." };
+
+    // Validate future and minimum prep + delivery lead time (75m, with 5m network tolerance)
+    const nowMs = referenceDate.getTime();
+    const earliestMs = nowMs + 70 * 60 * 1000;
+    if (dt.getTime() < earliestMs) {
+      return {
+        valid: false,
+        reason: "Selected slot is too early. Orders require 45-min prep + 30-min delivery time.",
+      };
+    }
+    return { valid: true, date: dt };
+  }
+
+  // Case 2: "Tomorrow, HH:MM AM/PM"
+  if (str.startsWith("Tomorrow,")) {
+    const t = extractTime(str);
+    if (!t) return { valid: false, reason: "Invalid time format in selected delivery slot." };
+    const hh = String(t.hour).padStart(2, "0");
+    const mm = String(t.minute).padStart(2, "0");
+    const istIso = `${tomorrow}T${hh}:${mm}:00+05:30`;
+    const dt = new Date(istIso);
+    if (isNaN(dt.getTime())) return { valid: false, reason: "Failed to parse delivery slot date." };
+    return { valid: true, date: dt };
+  }
+
+  // Case 3: "ASAP..."
+  if (str.startsWith("ASAP")) {
+    const asap = new Date(referenceDate.getTime() + 75 * 60 * 1000);
+    return { valid: true, date: asap };
+  }
+
+  // Case 4: Dated slots "Sat, 09 Nov, 12:00 PM"
+  const datedMatch = str.match(/^([A-Za-z]{3}),\s*(\d{1,2})\s+([A-Za-z]{3})/i);
+  if (datedMatch) {
+    const dayNum = parseInt(datedMatch[2], 10);
+    const monthName = datedMatch[3].toLowerCase();
+    const expectedMonth = MONTH_MAP_SHORT[monthName];
+    if (!expectedMonth) return { valid: false, reason: "Invalid month in selected slot." };
+
+    let resolvedDate: string | null = null;
+    for (let offset = 0; offset <= 75; offset++) {
+      const candidate = addDaysIST(today, offset);
+      const [, mStr, dStr] = candidate.split("-");
+      if (parseInt(mStr, 10) === expectedMonth && parseInt(dStr, 10) === dayNum) {
+        resolvedDate = candidate;
+        break;
+      }
+    }
+    if (!resolvedDate) return { valid: false, reason: "Delivery date is outside the scheduling window." };
+
+    const t = extractTime(str);
+    if (!t) return { valid: false, reason: "Invalid time format in selected delivery slot." };
+    const hh = String(t.hour).padStart(2, "0");
+    const mm = String(t.minute).padStart(2, "0");
+    const istIso = `${resolvedDate}T${hh}:${mm}:00+05:30`;
+    const dt = new Date(istIso);
+    if (isNaN(dt.getTime())) return { valid: false, reason: "Failed to parse delivery slot date." };
+
+    if (dt.getTime() < referenceDate.getTime()) {
+      return { valid: false, reason: "Selected delivery slot is in the past." };
+    }
+    return { valid: true, date: dt };
+  }
+
+  return { valid: false, reason: "Could not parse delivery time slot." };
+}
+
 // Retain legacy exports for backwards compatibility
 export type DeliverySlot = DeliverySlotOption;
 

@@ -3,9 +3,9 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { users, orders } from "@/lib/schema";
+import { users, orders, influencers } from "@/lib/schema";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
-import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
+import { validateDeliveryTimeSlot, parseSlotLabelToUTC } from "@/lib/deliverySlots";
 import { assertOrderAllowed } from "@/lib/storeStatus";
 import { calculateOrderTotals, validateCouponCode } from "@/lib/pricing";
 import { redeemHold } from "@/lib/hunt/claims";
@@ -112,19 +112,16 @@ export async function placeOrder(
       deliverySlotLabel,
     } = payload;
 
-    const orderNumber =
-      payload.orderNumber ||
-      "BAP-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-
-    // 1. Server-side validation of requested delivery time slot
-    if (!requestedDeliveryTime || !deliverySlotLabel) {
+    // 1. Server-side validation and parsing of requested delivery time slot
+    if (!deliverySlotLabel && !requestedDeliveryTime) {
       return {
         success: false,
         error: "Please select a delivery time slot before placing your order.",
       };
     }
 
-    const closureError = await assertOrderAllowed(deliverySlotLabel);
+    const effectiveSlotLabel = deliverySlotLabel || (typeof requestedDeliveryTime === "string" ? requestedDeliveryTime : "");
+    const closureError = await assertOrderAllowed(effectiveSlotLabel);
     if (closureError) {
       return {
         success: false,
@@ -132,9 +129,7 @@ export async function placeOrder(
       };
     }
 
-    const valResult = validateDeliveryTimeSlot(
-      requestedDeliveryTime || deliverySlotLabel
-    );
+    const valResult = validateDeliveryTimeSlot(effectiveSlotLabel);
     if (!valResult.valid) {
       return {
         success: false,
@@ -142,8 +137,15 @@ export async function placeOrder(
       };
     }
 
-    const parsedDate = new Date(requestedDeliveryTime);
-    const timeDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
+    // Convert slot to authoritative UTC Date (IST interpretation)
+    const slotParse = parseSlotLabelToUTC(effectiveSlotLabel);
+    if (!slotParse.valid || !slotParse.date) {
+      return {
+        success: false,
+        error: slotParse.reason || "Invalid delivery time slot. Please select a valid slot.",
+      };
+    }
+    const requestedDeliveryTimeUTC = slotParse.date;
 
     // 2. Authoritative server-side pricing, distance, coupon discount, and fee calculation
     const pricingRes = await calculateOrderTotals({
@@ -185,70 +187,117 @@ export async function placeOrder(
       userId = newUser.id;
     }
 
-    // 4. Insert order record with status "pending" directly (including huntClaimId)
-    const sanitizedHuntClaimId =
-      pricingRes.huntClaimId && String(pricingRes.huntClaimId).trim()
-        ? Number(pricingRes.huntClaimId)
-        : undefined;
+    // 4. Influencer FK resilience: verify influencer_id exists in influencers table
+    let finalInfluencerId: string | null = null;
+    let finalCommissionAmount = pricingRes.commissionAmount;
 
-    const sanitizedInfluencerId =
-      pricingRes.influencerId && String(pricingRes.influencerId).trim()
-        ? String(pricingRes.influencerId).trim()
-        : undefined;
+    if (pricingRes.influencerId) {
+      try {
+        const infCheck = await db
+          .select({ id: influencers.id })
+          .from(influencers)
+          .where(eq(influencers.id, pricingRes.influencerId))
+          .limit(1);
 
-    const sanitizedWhatsAppSent =
-      (payload as any).whatsapp_sent === "yes" ||
-      (payload as any).whatsapp_sent === true ||
-      (payload as any).whatsappSent === "yes" ||
-      (payload as any).whatsappSent === true;
-
-    const [newOrder] = await db
-      .insert(orders)
-      .values({
-        userId,
-        orderNumber,
-        items: Array.isArray(pricingRes.items) ? pricingRes.items : [],
-        totalAmount: pricingRes.total,
-        deliveryFee: pricingRes.deliveryFee,
-        deliveryAddress: customer.address,
-        requestedDeliveryTime: timeDate,
-        deliverySlotLabel,
-        couponCode: pricingRes.couponCode?.trim() || undefined,
-        influencerId: sanitizedInfluencerId,
-        discountAmount: pricingRes.discountAmount,
-        commissionAmount: pricingRes.commissionAmount,
-        huntClaimId: sanitizedHuntClaimId,
-        status: "pending",
-        whatsappSent: sanitizedWhatsAppSent as any,
-      })
-      .returning({ id: orders.id });
-
-    // 4b. Guarded atomic redemption if a treasure hunt voucher was used
-    if (pricingRes.huntClaimId) {
-      const redeemRes = await redeemHold(
-        pricingRes.huntClaimId,
-        newOrder.id,
-        cleanPhone
-      );
-
-      if (!redeemRes.success) {
-        // Guard failed (e.g. expired hold or race condition): rollback order
-        await db.delete(orders).where(eq(orders.id, newOrder.id));
-        return {
-          success: false,
-          error: "HUNT_VOUCHER_EXPIRED",
-        };
+        if (infCheck.length > 0) {
+          finalInfluencerId = infCheck[0].id;
+        } else {
+          console.warn(
+            `[placeOrder] Influencer ID "${pricingRes.influencerId}" not found in table "influencers". Falling back to influencer_id = NULL and commission = 0; discount still applies.`
+          );
+          finalInfluencerId = null;
+          finalCommissionAmount = 0;
+        }
+      } catch (infErr) {
+        console.warn("[placeOrder] Warning verifying influencer FK, setting influencer_id = null:", infErr);
+        finalInfluencerId = null;
+        finalCommissionAmount = 0;
       }
     }
 
-    // 5. Trigger Non-blocking Telegram Notification (Task 6)
+    // 5. Order Insertion with collision retry on order_number
+    const generateOrderNumber = () =>
+      "BAP-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+    let orderNumber = payload.orderNumber || generateOrderNumber();
+    let newOrder: { id: string } | null = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        const [inserted] = await db
+          .insert(orders)
+          .values({
+            userId,
+            orderNumber,
+            items: Array.isArray(pricingRes.items) ? pricingRes.items : [],
+            totalAmount: pricingRes.total,
+            deliveryFee: pricingRes.deliveryFee,
+            deliveryAddress: customer.address,
+            requestedDeliveryTime: requestedDeliveryTimeUTC,
+            deliverySlotLabel: effectiveSlotLabel,
+            couponCode: pricingRes.couponCode?.trim() || null,
+            influencerId: finalInfluencerId,
+            discountAmount: pricingRes.discountAmount,
+            commissionAmount: finalCommissionAmount,
+            huntClaimId: pricingRes.huntClaimId ? Number(pricingRes.huntClaimId) : null,
+            status: "pending",
+            whatsappSent: "no",
+          })
+          .returning({ id: orders.id });
+
+        newOrder = inserted;
+
+        // Guarded redemption if a treasure hunt voucher was used
+        if (pricingRes.huntClaimId) {
+          const redeemRes = await redeemHold(
+            pricingRes.huntClaimId,
+            newOrder.id,
+            cleanPhone
+          );
+          if (!redeemRes.success) {
+            // Guard failed (e.g. expired hold or race condition): rollback order
+            await db.delete(orders).where(eq(orders.id, newOrder.id));
+            return {
+              success: false,
+              error: "HUNT_VOUCHER_EXPIRED",
+            };
+          }
+        }
+
+        break; // Successfully inserted
+      } catch (insertErr: any) {
+        // Retry on unique constraint collision on order_number (PG error 23505)
+        const isUniqueViolation =
+          insertErr?.code === "23505" ||
+          insertErr?.cause?.code === "23505" ||
+          String(insertErr?.message).includes("idx_orders_order_number_unique");
+
+        if (isUniqueViolation && attempts < maxAttempts) {
+          console.warn(`[placeOrder] order_number "${orderNumber}" collided, retrying (${attempts}/${maxAttempts})...`);
+          orderNumber = generateOrderNumber();
+          continue;
+        }
+
+        // Re-throw if non-retryable or max attempts exhausted
+        throw insertErr;
+      }
+    }
+
+    if (!newOrder) {
+      throw new Error("Failed to insert order after maximum attempts.");
+    }
+
+    // 6. Secondary steps: Non-blocking Telegram Notification & WhatsApp link
     void sendTelegramOrderNotification({
       orderId: newOrder.id,
       orderNumber,
       customerName: customer.name,
       customerPhone: cleanPhone,
       deliveryAddress: customer.address,
-      deliverySlotLabel,
+      deliverySlotLabel: effectiveSlotLabel,
       items: pricingRes.items as Array<{ name?: string; summary?: string; quantity?: number; price?: number }>,
       totalAmount: pricingRes.total,
       deliveryFee: pricingRes.deliveryFee,
@@ -256,26 +305,40 @@ export async function placeOrder(
       couponCode: pricingRes.couponCode,
       huntRewardLabel: pricingRes.huntRewardLabel || null,
     }).catch((err) => {
-      console.error("[placeOrder] Telegram notification error:", err);
+      console.error("[placeOrder] Secondary step failed (Telegram notification):", err);
     });
 
-    // 6. Generate optional WhatsApp link for customer's reference
-    const whatsappUrl = generateWhatsAppLink(
-      pricingRes.items as CartItem[],
-      customer,
-      pricingRes.discountedSubtotal,
-      pricingRes.deliveryFee,
-      deliverySlotLabel,
-      newOrder.id,
-      orderNumber
-    );
+    let whatsappUrl: string | undefined;
+    try {
+      whatsappUrl = generateWhatsAppLink(
+        pricingRes.items as CartItem[],
+        customer,
+        pricingRes.discountedSubtotal,
+        pricingRes.deliveryFee,
+        effectiveSlotLabel,
+        newOrder.id,
+        orderNumber
+      );
+    } catch (waErr) {
+      console.error("[placeOrder] Secondary step failed (WhatsApp link generation):", waErr);
+    }
 
     return { success: true, whatsappUrl, orderId: newOrder.id, orderNumber };
-  } catch (error: unknown) {
-    console.error("[placeOrder] Error saving order:", error);
-    const msg =
-      error instanceof Error ? error.message : "Failed to place order. Please try again.";
-    return { success: false, error: msg };
+  } catch (error: any) {
+    // SECURITY: Log complete raw PostgreSQL / Drizzle error server-side only
+    console.error("[placeOrder] Critical server-side order failure:", {
+      message: error?.message,
+      code: error?.code || error?.cause?.code,
+      detail: error?.detail || error?.cause?.detail,
+      constraint: error?.constraint || error?.cause?.constraint,
+      causeMessage: error?.cause?.message,
+    });
+
+    // Return safe, user-friendly error to browser (never expose SQL, IDs, or params)
+    return {
+      success: false,
+      error: "We couldn't place your order. Please try again or contact us on WhatsApp.",
+    };
   }
 }
 
