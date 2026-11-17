@@ -209,32 +209,40 @@ export async function loginAdmin(
 }
 
 /**
- * Server-side verification of signed admin session cookie & payload expiration
+ * Admin session verification state
  */
-export async function verifyAdminSession(): Promise<boolean> {
+export interface AdminSessionState {
+  authenticated: boolean;
+  expired: boolean;
+}
+
+/**
+ * Server-side detailed verification of signed admin session cookie & payload expiration
+ */
+export async function getAdminSessionState(): Promise<AdminSessionState> {
   try {
     const config = getAuthConfig();
-    if (!config.valid || !config.secret) return false;
+    if (!config.valid || !config.secret) return { authenticated: false, expired: false };
 
     let cookieStore;
     try {
       cookieStore = await cookies();
     } catch {
-      return false;
+      return { authenticated: false, expired: false };
     }
 
     const token = cookieStore.get(COOKIE_NAME)?.value;
-    if (!token) return false;
+    if (!token) return { authenticated: false, expired: false };
 
     const parts = token.split(".");
-    if (parts.length !== 4) return false;
+    if (parts.length !== 4) return { authenticated: false, expired: false };
 
     const [expiresAtStr, iatStr, nonce, signature] = parts;
     const expiresAt = parseInt(expiresAtStr, 10);
 
     // Verify expiration inside payload (8 hours)
     if (isNaN(expiresAt) || Date.now() > expiresAt) {
-      return false;
+      return { authenticated: false, expired: true };
     }
 
     const payload = `${expiresAtStr}.${iatStr}.${nonce}`;
@@ -245,13 +253,21 @@ export async function verifyAdminSession(): Promise<boolean> {
     const expectedBuffer = sha256Buffer(expectedSignature);
 
     if (!crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
-      return false;
+      return { authenticated: false, expired: false };
     }
 
-    return true;
+    return { authenticated: true, expired: false };
   } catch {
-    return false;
+    return { authenticated: false, expired: false };
   }
+}
+
+/**
+ * Server-side verification of signed admin session cookie & payload expiration
+ */
+export async function verifyAdminSession(): Promise<boolean> {
+  const state = await getAdminSessionState();
+  return state.authenticated;
 }
 
 /**

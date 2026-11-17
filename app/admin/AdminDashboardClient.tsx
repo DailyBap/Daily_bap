@@ -7,6 +7,7 @@ import {
   toggleAutoReviewRequest,
   loginAdminAction,
   logoutAdminAction,
+  getAllOrders,
   OrderStatus,
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
@@ -106,6 +107,7 @@ interface OfferRecord {
 
 interface AdminDashboardClientProps {
   isAuthenticated: boolean;
+  isSessionExpired?: boolean;
   initialOrders: OrderRecord[];
   initialOffers: OfferRecord[];
   initialInfluencers?: InfluencerWithStats[];
@@ -156,6 +158,7 @@ const handleWhatsAppAction = (
 
 export default function AdminDashboardClient({
   isAuthenticated: initialAuthStatus,
+  isSessionExpired = false,
   initialOrders,
   initialOffers,
   initialInfluencers = [],
@@ -165,6 +168,7 @@ export default function AdminDashboardClient({
   initialAutoReviewRequest = true,
 }: AdminDashboardClientProps) {
   const [authed, setAuthed] = useState<boolean>(initialAuthStatus);
+  const [isSessionExpiredState, setIsSessionExpiredState] = useState<boolean>(isSessionExpired);
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
 
@@ -252,6 +256,7 @@ export default function AdminDashboardClient({
       const res = await loginAdminAction(passwordInput);
       if (res.success) {
         setAuthed(true);
+        setIsSessionExpiredState(false);
         window.location.reload();
       } else {
         setLoginError(res.error || "Invalid password");
@@ -264,6 +269,19 @@ export default function AdminDashboardClient({
       await logoutAdminAction();
       setAuthed(false);
       window.location.reload();
+    });
+  };
+
+  // Fetch updated orders list
+  const refreshOrders = () => {
+    startTransition(async () => {
+      const res = await getAllOrders();
+      if (!res.authenticated) {
+        setIsSessionExpiredState(true);
+        setAuthed(false);
+      } else {
+        setOrdersList(res.orders as OrderRecord[]);
+      }
     });
   };
 
@@ -300,9 +318,16 @@ export default function AdminDashboardClient({
             <h1 className="font-display font-bold text-2xl text-brand-primary">
               Daily Bap Admin Access
             </h1>
-            <p className="text-xs text-gray-500">
-              Enter admin password to access kitchen management, orders & creator analytics.
-            </p>
+            {isSessionExpiredState ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold flex items-center justify-center gap-1.5">
+                <AlertCircle size={15} className="shrink-0 text-amber-600" />
+                <span>Your admin session expired, please enter your PIN again</span>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">
+                Enter admin password to access kitchen management, orders & creator analytics.
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleLoginSubmit} className="space-y-4">
@@ -361,7 +386,11 @@ export default function AdminDashboardClient({
     );
 
     startTransition(async () => {
-      await updateOrderStatus(orderId, newStatus);
+      const res = await updateOrderStatus(orderId, newStatus);
+      if (res && !res.success && res.error === "Unauthorized") {
+        setIsSessionExpiredState(true);
+        setAuthed(false);
+      }
     });
   };
 
@@ -983,15 +1012,36 @@ export default function AdminDashboardClient({
         {activeTab === "orders" && (
           <section className="bg-white rounded-3xl border border-gray-200/80 shadow-xs overflow-hidden">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShoppingBag className="w-5 h-5 text-brand-primary" />
-                <h2 className="font-display font-bold text-xl text-brand-primary">
-                  Customer Orders ({ordersList.length})
-                </h2>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-brand-primary" />
+                  <h2 className="font-display font-bold text-xl text-brand-primary">
+                    Customer Orders ({ordersList.length})
+                  </h2>
+                </div>
+                <button
+                  onClick={refreshOrders}
+                  disabled={isPending}
+                  title="Refresh orders"
+                  className="p-1.5 text-gray-400 hover:text-brand-primary rounded-lg hover:bg-gray-100 transition"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isPending ? "animate-spin" : ""}`} />
+                </button>
               </div>
             </div>
 
-            {ordersList.length === 0 ? (
+            {isSessionExpiredState || !authed ? (
+              <div className="p-12 text-center text-amber-800 space-y-3">
+                <Lock className="w-10 h-10 mx-auto text-amber-500" />
+                <p className="font-semibold text-sm">Your admin session expired, please enter your PIN again</p>
+                <button
+                  onClick={() => setAuthed(false)}
+                  className="px-4 py-2 bg-brand-primary text-white text-xs font-bold rounded-xl shadow-xs hover:bg-brand-accent transition"
+                >
+                  Enter PIN
+                </button>
+              </div>
+            ) : ordersList.length === 0 ? (
               <div className="p-12 text-center text-gray-400 space-y-2">
                 <ShoppingBag className="w-10 h-10 mx-auto text-gray-300" />
                 <p className="font-medium text-sm">No orders recorded yet.</p>

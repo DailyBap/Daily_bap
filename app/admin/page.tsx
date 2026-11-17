@@ -3,7 +3,7 @@
 import {
   getAllOrders,
   getAutoReviewRequestStatus,
-  checkAdminSessionAction,
+  getAdminSessionStateAction,
 } from "@/app/actions/adminActions";
 import { getOffers } from "@/app/actions/offerActions";
 import { getInfluencersAction } from "@/app/actions/influencerActions";
@@ -15,13 +15,14 @@ import AdminDashboardClient from "./AdminDashboardClient";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const isAuthenticated = await checkAdminSessionAction();
+  const sessionState = await getAdminSessionStateAction();
 
   // If not authenticated, return immediately WITHOUT querying orders, offers, or settings
-  if (!isAuthenticated) {
+  if (!sessionState.authenticated) {
     return (
       <AdminDashboardClient
         isAuthenticated={false}
+        isSessionExpired={sessionState.expired}
         initialOrders={[]}
         initialOffers={[]}
         initialInfluencers={[]}
@@ -42,7 +43,7 @@ export default async function AdminPage() {
   }
 
   const [
-    initialOrders,
+    ordersResult,
     initialOffers,
     initialAutoReviewRequest,
     initialInfluencers,
@@ -55,10 +56,27 @@ export default async function AdminPage() {
     getSalesStatsAction(),
   ]);
 
+  if (!ordersResult.authenticated) {
+    return (
+      <AdminDashboardClient
+        isAuthenticated={false}
+        isSessionExpired={true}
+        initialOrders={[]}
+        initialOffers={[]}
+        initialInfluencers={[]}
+        initialSalesStats={null}
+        initialClosureInfo={null}
+        initialKitchenClosed={false}
+        initialAutoReviewRequest={true}
+      />
+    );
+  }
+
   return (
     <AdminDashboardClient
       isAuthenticated={true}
-      initialOrders={initialOrders}
+      isSessionExpired={false}
+      initialOrders={ordersResult.orders}
       initialOffers={initialOffers}
       initialInfluencers={initialInfluencers}
       initialSalesStats={initialSalesStats}

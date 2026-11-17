@@ -20,7 +20,9 @@ import { releaseClaim } from "@/lib/hunt/claims";
 import {
   loginAdmin,
   verifyAdminSession,
+  getAdminSessionState,
   logoutAdmin,
+  type AdminSessionState,
 } from "@/lib/adminAuth";
 
 export type OrderStatus =
@@ -53,6 +55,13 @@ export async function logoutAdminAction() {
  */
 export async function checkAdminSessionAction(): Promise<boolean> {
   return await verifyAdminSession();
+}
+
+/**
+ * Server Action: Get detailed admin session status (authenticated & expired)
+ */
+export async function getAdminSessionStateAction(): Promise<AdminSessionState> {
+  return await getAdminSessionState();
 }
 
 /**
@@ -287,12 +296,39 @@ export async function toggleAutoReviewRequest(enabled: boolean) {
   }
 }
 
+export interface GetAllOrdersResponse {
+  authenticated: boolean;
+  orders: Array<{
+    id: string;
+    orderNumber: string | null;
+    status: OrderStatus;
+    totalAmount: number;
+    deliveryFee: number;
+    deliveryAddress: string;
+    requestedDeliveryTime: Date | null;
+    deliverySlotLabel: string | null;
+    items: unknown;
+    couponCode: string | null;
+    discountAmount: number | null;
+    commissionAmount: number | null;
+    commissionPaid: boolean | null;
+    commissionPaidAt: Date | null;
+    huntClaimId: number | null;
+    huntClaimStatus: string | null;
+    huntVoucherCode: string | null;
+    createdAt: Date;
+    userName: string | null;
+    userPhone: string | null;
+  }>;
+}
+
 /**
  * Fetch all orders ordered by newest first, joining customer info. Requires Admin Auth.
+ * Returns { authenticated: false, orders: [] } when admin session is missing or expired.
  */
-export async function getAllOrders() {
+export async function getAllOrders(): Promise<GetAllOrdersResponse> {
   if (!(await verifyAdminSession())) {
-    return [];
+    return { authenticated: false, orders: [] };
   }
 
   try {
@@ -324,10 +360,10 @@ export async function getAllOrders() {
       .leftJoin(codeClaims, eq(orders.huntClaimId, codeClaims.id))
       .orderBy(desc(orders.createdAt));
 
-    return result;
+    return { authenticated: true, orders: result as GetAllOrdersResponse["orders"] };
   } catch (error) {
     console.error("[getAllOrders] Error fetching orders:", error);
-    return [];
+    return { authenticated: true, orders: [] };
   }
 }
 

@@ -103,6 +103,25 @@ export async function getSlotCapacities(): Promise<Record<string, number>> {
 export async function placeOrder(
   payload: PlaceOrderPayload
 ): Promise<{ success: boolean; whatsappUrl?: string; orderId?: string; orderNumber?: string; error?: string }> {
+  const startTime = Date.now();
+  let currentStage: "slot" | "pricing" | "db:user" | "db:influencer" | "db:order_insert" | "post:whatsapp" = "slot";
+  let stageStartTime = startTime;
+  const stageElapsed: Record<string, number> = {
+    slot: 0,
+    pricing: 0,
+    "db:user": 0,
+    "db:influencer": 0,
+    "db:order_insert": 0,
+    "post:whatsapp": 0,
+  };
+
+  const advanceStage = (nextStage: "pricing" | "db:user" | "db:influencer" | "db:order_insert" | "post:whatsapp") => {
+    const now = Date.now();
+    stageElapsed[currentStage] = now - stageStartTime;
+    currentStage = nextStage;
+    stageStartTime = now;
+  };
+
   try {
     const {
       items,
@@ -112,7 +131,7 @@ export async function placeOrder(
       deliverySlotLabel,
     } = payload;
 
-    // 1. Server-side validation and parsing of requested delivery time slot
+    // 1. [stage:slot] Server-side validation and parsing of requested delivery time slot
     if (!deliverySlotLabel && !requestedDeliveryTime) {
       return {
         success: false,
@@ -147,7 +166,8 @@ export async function placeOrder(
     }
     const requestedDeliveryTimeUTC = slotParse.date;
 
-    // 2. Authoritative server-side pricing, distance, coupon discount, and fee calculation
+    // 2. [stage:pricing] Authoritative server-side pricing, distance, coupon discount, and fee calculation
+    advanceStage("pricing");
     const pricingRes = await calculateOrderTotals({
       items,
       lat: customer.lat,
@@ -163,7 +183,8 @@ export async function placeOrder(
       };
     }
 
-    // 3. Find or create user
+    // 3. [stage:db:user] Find or create user
+    advanceStage("db:user");
     let userId: string;
     const cleanPhone = customer.phone.replace(/\D/g, "");
 
@@ -187,7 +208,8 @@ export async function placeOrder(
       userId = newUser.id;
     }
 
-    // 4. Influencer FK resilience: verify influencer_id exists in influencers table
+    // 4. [stage:db:influencer] Influencer FK resilience: verify influencer_id exists in influencers table
+    advanceStage("db:influencer");
     let finalInfluencerId: string | null = null;
     let finalCommissionAmount = pricingRes.commissionAmount;
 
@@ -203,19 +225,20 @@ export async function placeOrder(
           finalInfluencerId = infCheck[0].id;
         } else {
           console.warn(
-            `[placeOrder] Influencer ID "${pricingRes.influencerId}" not found in table "influencers". Falling back to influencer_id = NULL and commission = 0; discount still applies.`
+            `[placeOrder][stage:db:influencer] Influencer ID "${pricingRes.influencerId}" not found in table "influencers". Falling back to influencer_id = NULL and commission = 0; discount still applies.`
           );
           finalInfluencerId = null;
           finalCommissionAmount = 0;
         }
       } catch (infErr) {
-        console.warn("[placeOrder] Warning verifying influencer FK, setting influencer_id = null:", infErr);
+        console.warn("[placeOrder][stage:db:influencer] Warning verifying influencer FK, setting influencer_id = null:", infErr);
         finalInfluencerId = null;
         finalCommissionAmount = 0;
       }
     }
 
-    // 5. Order Insertion with collision retry on order_number
+    // 5. [stage:db:order_insert] Order Insertion with collision retry on order_number
+    advanceStage("db:order_insert");
     const generateOrderNumber = () =>
       "BAP-" + Math.random().toString(36).substring(2, 6).toUpperCase();
 
@@ -276,7 +299,7 @@ export async function placeOrder(
           String(insertErr?.message).includes("idx_orders_order_number_unique");
 
         if (isUniqueViolation && attempts < maxAttempts) {
-          console.warn(`[placeOrder] order_number "${orderNumber}" collided, retrying (${attempts}/${maxAttempts})...`);
+          console.warn(`[placeOrder][stage:db:order_insert] order_number "${orderNumber}" collided, retrying (${attempts}/${maxAttempts})...`);
           orderNumber = generateOrderNumber();
           continue;
         }
@@ -290,7 +313,8 @@ export async function placeOrder(
       throw new Error("Failed to insert order after maximum attempts.");
     }
 
-    // 6. Secondary steps: Non-blocking Telegram Notification & WhatsApp link
+    // 6. [stage:post:whatsapp] Secondary steps: Non-blocking Telegram Notification & WhatsApp link
+    advanceStage("post:whatsapp");
     void sendTelegramOrderNotification({
       orderId: newOrder.id,
       orderNumber,
@@ -305,7 +329,7 @@ export async function placeOrder(
       couponCode: pricingRes.couponCode,
       huntRewardLabel: pricingRes.huntRewardLabel || null,
     }).catch((err) => {
-      console.error("[placeOrder] Secondary step failed (Telegram notification):", err);
+      console.error("[placeOrder][stage:post:whatsapp] Secondary step failed (Telegram notification):", err);
     });
 
     let whatsappUrl: string | undefined;
@@ -320,18 +344,25 @@ export async function placeOrder(
         orderNumber
       );
     } catch (waErr) {
-      console.error("[placeOrder] Secondary step failed (WhatsApp link generation):", waErr);
+      console.error("[placeOrder][stage:post:whatsapp] Secondary step failed (WhatsApp link generation):", waErr);
     }
 
     return { success: true, whatsappUrl, orderId: newOrder.id, orderNumber };
   } catch (error: any) {
-    // SECURITY: Log complete raw PostgreSQL / Drizzle error server-side only
-    console.error("[placeOrder] Critical server-side order failure:", {
+    const now = Date.now();
+    stageElapsed[currentStage] = now - stageStartTime;
+    const totalElapsed = now - startTime;
+
+    // SECURITY: Log complete raw PostgreSQL / Drizzle error & stage breakdown server-side only
+    console.error(`[placeOrder][stage:${currentStage}] Critical failure:`, {
+      stage: `[stage:${currentStage}]`,
+      elapsedMsTotal: totalElapsed,
+      elapsedMsPerStage: stageElapsed,
       message: error?.message,
-      code: error?.code || error?.cause?.code,
-      detail: error?.detail || error?.cause?.detail,
-      constraint: error?.constraint || error?.cause?.constraint,
+      causeCode: error?.cause?.code || error?.code,
       causeMessage: error?.cause?.message,
+      detail: error?.cause?.detail || error?.detail,
+      constraint: error?.cause?.constraint || error?.constraint,
     });
 
     // Return safe, user-friendly error to browser (never expose SQL, IDs, or params)
