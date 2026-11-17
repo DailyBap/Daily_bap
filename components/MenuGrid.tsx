@@ -9,7 +9,7 @@ import DietBadge from "./DietBadge";
 export default function MenuGrid() {
   const [activeTab, setActiveTab] = useState<MenuCategoryKey>("bentoBoxes");
 
-  const activeItems = menuData[activeTab];
+  const activeItems = menuData[activeTab] ?? [];
 
   return (
     <>
