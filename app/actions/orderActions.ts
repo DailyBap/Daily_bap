@@ -186,6 +186,22 @@ export async function placeOrder(
     }
 
     // 4. Insert order record with status "pending" directly (including huntClaimId)
+    const sanitizedHuntClaimId =
+      pricingRes.huntClaimId && String(pricingRes.huntClaimId).trim()
+        ? Number(pricingRes.huntClaimId)
+        : undefined;
+
+    const sanitizedInfluencerId =
+      pricingRes.influencerId && String(pricingRes.influencerId).trim()
+        ? String(pricingRes.influencerId).trim()
+        : undefined;
+
+    const sanitizedWhatsAppSent =
+      (payload as any).whatsapp_sent === "yes" ||
+      (payload as any).whatsapp_sent === true ||
+      (payload as any).whatsappSent === "yes" ||
+      (payload as any).whatsappSent === true;
+
     const [newOrder] = await db
       .insert(orders)
       .values({
@@ -197,13 +213,13 @@ export async function placeOrder(
         deliveryAddress: customer.address,
         requestedDeliveryTime: timeDate,
         deliverySlotLabel,
-        couponCode: pricingRes.couponCode || null,
-        influencerId: pricingRes.influencerId || null,
+        couponCode: pricingRes.couponCode?.trim() || undefined,
+        influencerId: sanitizedInfluencerId,
         discountAmount: pricingRes.discountAmount,
         commissionAmount: pricingRes.commissionAmount,
-        huntClaimId: pricingRes.huntClaimId ? Number(pricingRes.huntClaimId) : null,
+        huntClaimId: sanitizedHuntClaimId,
         status: "pending",
-        whatsappSent: "no",
+        whatsappSent: sanitizedWhatsAppSent as any,
       })
       .returning({ id: orders.id });
 
