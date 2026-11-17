@@ -12,6 +12,7 @@ export interface TelegramOrderNotificationData {
   deliveryFee: number;
   discountAmount?: number;
   couponCode?: string | null;
+  huntRewardLabel?: string | null;
 }
 
 /**
@@ -44,6 +45,10 @@ export async function sendTelegramOrderNotification(
         ? `\n🎟️ <b>Coupon:</b> <code>${data.couponCode}</code> (−₹${data.discountAmount})`
         : "";
 
+    const huntLine = data.huntRewardLabel
+      ? `\n🎁 <b>Treasure Hunt:</b> ${data.huntRewardLabel}`
+      : "";
+
     const message = [
       `🔔 <b>NEW DAILY BAP ORDER RECEIVED!</b>`,
       `━━━━━━━━━━━━━━━━━━━━`,
@@ -55,6 +60,7 @@ export async function sendTelegramOrderNotification(
       `━━━━━━━━━━━━━━━━━━━━`,
       `🍲 <b>Items:</b>\n${itemsList}`,
       discountLine,
+      huntLine,
       `🚚 <b>Delivery Fee:</b> ${data.deliveryFee === 0 ? "FREE" : `₹${data.deliveryFee}`}`,
       `💰 <b>Total Amount:</b> <b>₹${data.totalAmount}</b>`,
       `━━━━━━━━━━━━━━━━━━━━`,

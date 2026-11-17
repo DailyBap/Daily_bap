@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/adminActions";
 import { createOffer, toggleOffer, updateOffer } from "@/app/actions/offerActions";
 import AdminOfferSettings from "@/components/AdminOfferSettings";
+import AdminHuntPanel from "@/components/hunt/AdminHuntPanel";
 import { todayIST, formatDisplayDateIST, type ClosureInfo } from "@/lib/dateUtils";
 import {
   getInfluencersAction,
@@ -65,6 +66,7 @@ import {
   FileSpreadsheet,
   FileWarning,
   Trash2,
+  Gift,
 } from "lucide-react";
 
 interface OrderItem {
@@ -166,7 +168,7 @@ export default function AdminDashboardClient({
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"orders" | "creators" | "analytics" | "offers">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "creators" | "analytics" | "offers" | "hunt">("orders");
 
   // Orders State
   const [ordersList, setOrdersList] = useState<OrderRecord[]>(initialOrders);
@@ -963,6 +965,18 @@ export default function AdminDashboardClient({
               {offersList.length}
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("hunt")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm transition whitespace-nowrap ${
+              activeTab === "hunt"
+                ? "bg-brand-primary text-white shadow-sm"
+                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+            }`}
+          >
+            <Gift className="w-4 h-4 text-amber-500" />
+            <span>Treasure Hunt</span>
+          </button>
         </div>
 
         {/* TAB 1: ORDERS QUEUE */}
@@ -1069,29 +1083,42 @@ export default function AdminDashboardClient({
                             {order.couponCode ? (
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-mono font-bold text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md border border-purple-200">
+                                  <span
+                                    className={`font-mono font-bold text-xs px-2 py-0.5 rounded-md border ${
+                                      order.couponCode.startsWith("HUNT-")
+                                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                                        : "bg-purple-100 text-purple-800 border-purple-200"
+                                    }`}
+                                  >
                                     {order.couponCode}
                                   </span>
                                   <span className="text-xs font-bold text-emerald-600">
                                     −₹{order.discountAmount || 0}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-gray-500">
-                                    Comm: ₹{order.commissionAmount || 0}
+
+                                {order.couponCode.startsWith("HUNT-") ? (
+                                  <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                    🎁 Treasure Hunt (No Comm)
                                   </span>
-                                  <button
-                                    onClick={() => handleToggleOrderCommissionPaid(order.id, !!order.commissionPaid)}
-                                    disabled={isPending}
-                                    className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase transition ${
-                                      order.commissionPaid
-                                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                                        : "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                    }`}
-                                  >
-                                    {order.commissionPaid ? "Paid" : "Mark Paid"}
-                                  </button>
-                                </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-gray-500">
+                                      Comm: ₹{order.commissionAmount || 0}
+                                    </span>
+                                    <button
+                                      onClick={() => handleToggleOrderCommissionPaid(order.id, !!order.commissionPaid)}
+                                      disabled={isPending}
+                                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase transition ${
+                                        order.commissionPaid
+                                          ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                          : "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                      }`}
+                                    >
+                                      {order.commissionPaid ? "Paid" : "Mark Paid"}
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-gray-400 text-xs">—</span>
@@ -1601,6 +1628,9 @@ export default function AdminDashboardClient({
 
         {/* TAB 4: OFFERS BANNER */}
         {activeTab === "offers" && <AdminOfferSettings />}
+
+        {/* TAB 5: TREASURE HUNT */}
+        {activeTab === "hunt" && <AdminHuntPanel />}
       </div>
 
       {/* MODAL 1: ADD NEW CREATOR */}

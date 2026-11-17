@@ -3,7 +3,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, offers, users, settings } from "@/lib/schema";
+import { orders, offers, users, settings, codeClaims } from "@/lib/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { getClosureInfo } from "@/lib/storeStatus";
 import {
@@ -16,6 +16,7 @@ import {
 
 import { revalidatePath } from "next/cache";
 import { siteConfig } from "@/config/brand";
+import { releaseClaim } from "@/lib/hunt/claims";
 import {
   loginAdmin,
   verifyAdminSession,
@@ -311,12 +312,16 @@ export async function getAllOrders() {
         commissionAmount: orders.commissionAmount,
         commissionPaid: orders.commissionPaid,
         commissionPaidAt: orders.commissionPaidAt,
+        huntClaimId: orders.huntClaimId,
+        huntClaimStatus: codeClaims.status,
+        huntVoucherCode: codeClaims.voucherCode,
         createdAt: orders.createdAt,
         userName: users.name,
         userPhone: users.phone,
       })
       .from(orders)
       .leftJoin(users, eq(orders.userId, users.id))
+      .leftJoin(codeClaims, eq(orders.huntClaimId, codeClaims.id))
       .orderBy(desc(orders.createdAt));
 
     return result;
@@ -340,6 +345,23 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
       .update(orders)
       .set({ status: newStatus })
       .where(eq(orders.id, orderId));
+
+    // Release treasure hunt claim if order is cancelled
+    if (newStatus === "cancelled") {
+      try {
+        const orderRecords = await db
+          .select({ huntClaimId: orders.huntClaimId })
+          .from(orders)
+          .where(eq(orders.id, orderId))
+          .limit(1);
+
+        if (orderRecords.length > 0 && orderRecords[0].huntClaimId) {
+          await releaseClaim(orderRecords[0].huntClaimId);
+        }
+      } catch (cancelErr) {
+        console.error("[updateOrderStatus] Error releasing hunt claim on cancel:", cancelErr);
+      }
+    }
 
     // Non-blocking trigger for post-delivery Google Review request
     if (newStatus === "delivered") {

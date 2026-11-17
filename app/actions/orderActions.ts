@@ -8,6 +8,7 @@ import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { validateDeliveryTimeSlot } from "@/lib/deliverySlots";
 import { assertOrderAllowed } from "@/lib/storeStatus";
 import { calculateOrderTotals, validateCouponCode } from "@/lib/pricing";
+import { redeemHold } from "@/lib/hunt/claims";
 import { getClientIp } from "@/lib/adminAuth";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
 import { eq, count } from "drizzle-orm";
@@ -26,6 +27,18 @@ export async function validateCouponAction(code: string) {
         success: true,
         code: res.influencer.code,
         discountPercent: res.influencer.discountPercent,
+        isHunt: false,
+      };
+    }
+    if (res.isValid && res.huntClaim) {
+      return {
+        success: true,
+        code: res.huntClaim.code,
+        discountPercent: res.huntClaim.discountValue || 0,
+        isHunt: true,
+        huntLabel: res.huntClaim.label,
+        offerType: res.huntClaim.offerType,
+        expiresAt: res.huntClaim.expiresAt.toISOString(),
       };
     }
     return {
@@ -172,7 +185,7 @@ export async function placeOrder(
       userId = newUser.id;
     }
 
-    // 4. Insert order record with status "pending" directly
+    // 4. Insert order record with status "pending" directly (including huntClaimId)
     const [newOrder] = await db
       .insert(orders)
       .values({
@@ -188,10 +201,29 @@ export async function placeOrder(
         influencerId: pricingRes.influencerId,
         discountAmount: pricingRes.discountAmount,
         commissionAmount: pricingRes.commissionAmount,
+        huntClaimId: pricingRes.huntClaimId || null,
         status: "pending",
         whatsappSent: "no",
       })
       .returning({ id: orders.id });
+
+    // 4b. Guarded atomic redemption if a treasure hunt voucher was used
+    if (pricingRes.huntClaimId) {
+      const redeemRes = await redeemHold(
+        pricingRes.huntClaimId,
+        newOrder.id,
+        cleanPhone
+      );
+
+      if (!redeemRes.success) {
+        // Guard failed (e.g. expired hold or race condition): rollback order
+        await db.delete(orders).where(eq(orders.id, newOrder.id));
+        return {
+          success: false,
+          error: "HUNT_VOUCHER_EXPIRED",
+        };
+      }
+    }
 
     // 5. Trigger Non-blocking Telegram Notification (Task 6)
     void sendTelegramOrderNotification({
@@ -206,6 +238,7 @@ export async function placeOrder(
       deliveryFee: pricingRes.deliveryFee,
       discountAmount: pricingRes.discountAmount,
       couponCode: pricingRes.couponCode,
+      huntRewardLabel: pricingRes.huntRewardLabel || null,
     }).catch((err) => {
       console.error("[placeOrder] Telegram notification error:", err);
     });

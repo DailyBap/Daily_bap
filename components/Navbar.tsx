@@ -3,10 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { ShoppingCart, Menu, X } from "lucide-react";
+import { ShoppingCart, Menu, X, Camera } from "lucide-react";
 import { useCartStore } from "@/store/useCartStore";
 import { siteConfig } from "@/config/brand";
 import OfferTopBanner from "@/components/OfferTopBanner";
+import QrScannerModal from "@/components/hunt/QrScannerModal";
+import { checkHuntEnabledAction } from "@/app/actions/huntActions";
 
 // Inline Instagram SVG (not in this lucide-react version)
 function InstagramIcon({ size = 18 }: { size?: number }) {
@@ -26,6 +28,8 @@ interface NavbarProps {
 export default function Navbar({ onCartOpen }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAssamese, setIsAssamese] = useState(false);
+  const [huntEnabled, setHuntEnabled] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const totalItems = useCartStore((s) => s.getTotalItems());
 
   useEffect(() => {
@@ -33,6 +37,12 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
       setIsAssamese((prev) => !prev);
     }, 3000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    checkHuntEnabledAction()
+      .then(setHuntEnabled)
+      .catch(() => setHuntEnabled(false));
   }, []);
 
   const navLinks = [
@@ -94,7 +104,19 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {huntEnabled && (
+              <button
+                onClick={() => setScannerOpen(true)}
+                className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white px-3.5 py-2 rounded-full text-xs sm:text-sm font-semibold transition hover:scale-105 active:scale-95 border border-white/20 shadow-xs"
+                title="Scan Treasure Hunt QR"
+                aria-label="Scan Treasure Hunt QR"
+              >
+                <Camera size={16} className="text-amber-300" />
+                <span className="hidden sm:inline font-bold">Hunt</span>
+              </button>
+            )}
+
             <a
               href={siteConfig.contact.instagramUrl}
               target="_blank"
@@ -144,6 +166,17 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
                 {link.label}
               </a>
             ))}
+            {huntEnabled && (
+              <button
+                onClick={() => {
+                  setMobileOpen(false);
+                  setScannerOpen(true);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-2.5 text-amber-300 hover:text-white text-sm font-bold"
+              >
+                <Camera size={16} /> Treasure Hunt Scanner
+              </button>
+            )}
             <a
               href={siteConfig.contact.instagramUrl}
               target="_blank"
@@ -155,6 +188,14 @@ export default function Navbar({ onCartOpen }: NavbarProps) {
           </div>
         )}
       </nav>
+
+      {huntEnabled && (
+        <QrScannerModal
+          isOpen={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onOpenCart={onCartOpen}
+        />
+      )}
     </header>
   );
 }

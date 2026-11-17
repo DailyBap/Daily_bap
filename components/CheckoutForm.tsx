@@ -95,6 +95,13 @@ export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
           clearCart();
           // Redirect directly to the order confirmation page
           router.push(`/orders/${res.orderId}`);
+        } else if (res?.error === "HUNT_VOUCHER_EXPIRED") {
+          // Drop expired hunt voucher from cart and display actionable explanation
+          useCartStore.getState().clearCoupon();
+          setErrors({
+            submit:
+              "Your treasure hunt voucher has expired or was already claimed. The voucher has been removed from your cart. Please review your updated total and submit your order.",
+          });
         } else if (res?.error) {
           setErrors({ submit: res.error });
         } else {

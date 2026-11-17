@@ -314,8 +314,16 @@ export default async function OrderStatusPage({ params }: OrderPageProps) {
                   </div>
                 ))}
                 {order.couponCode && order.discountAmount > 0 && (
-                  <div className="p-3.5 bg-emerald-50/70 flex items-center justify-between text-xs font-semibold text-emerald-700">
-                    <span>Discount ({order.couponCode})</span>
+                  <div className={`p-3.5 flex items-center justify-between text-xs font-semibold ${
+                    order.couponCode.startsWith("HUNT-")
+                      ? "bg-amber-50/80 text-amber-900 border-y border-amber-100"
+                      : "bg-emerald-50/70 text-emerald-700"
+                  }`}>
+                    <span>
+                      {order.couponCode.startsWith("HUNT-")
+                        ? `Treasure Hunt reward applied (${order.couponCode})`
+                        : `Discount (${order.couponCode})`}
+                    </span>
                     <span>−₹{order.discountAmount}</span>
                   </div>
                 )}

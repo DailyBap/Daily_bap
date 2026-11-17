@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Trash2, Plus, Minus, ShoppingBag, MessageCircle, Tag, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { X, Trash2, Plus, Minus, ShoppingBag, MessageCircle, Tag, CheckCircle, AlertCircle, Loader2, Sparkles, Clock } from "lucide-react";
 import { useCartStore } from "@/store/useCartStore";
 import { siteConfig } from "@/config/brand";
 import { validateCouponAction } from "@/app/actions/orderActions";
@@ -29,18 +29,70 @@ export default function CartDrawer({ isOpen, onClose, closureInfo }: CartDrawerP
     discountPercent,
     setCoupon,
     clearCoupon,
+    huntVoucher,
+    setHuntVoucher,
   } = useCartStore();
 
   const [showCheckout, setShowCheckout] = useState(false);
   const [couponInput, setCouponInput] = useState("");
   const [couponError, setCouponError] = useState("");
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [minutesRemaining, setMinutesRemaining] = useState<number | null>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
   const subtotal = getSubtotal();
   const discountAmount = getDiscountAmount();
   const deliveryFee = getDeliveryFee();
   const total = getTotal();
+
+  // Re-validate coupon / hunt voucher whenever the drawer opens
+  useEffect(() => {
+    if (!isOpen || !couponCode) return;
+
+    let isMounted = true;
+    validateCouponAction(couponCode).then((res) => {
+      if (!isMounted) return;
+      if (!res.success) {
+        clearCoupon();
+        setCouponError("Your applied voucher or promo code has expired and was removed.");
+      } else if (res.isHunt && res.expiresAt) {
+        setHuntVoucher({
+          code: res.code || couponCode,
+          expiresAt: res.expiresAt,
+          label: res.huntLabel || "Treasure Hunt Reward",
+          offerType: res.offerType,
+          discountPercent: res.discountPercent,
+        });
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, couponCode, clearCoupon, setHuntVoucher]);
+
+  // Compute countdown for active hunt voucher
+  useEffect(() => {
+    if (!huntVoucher?.expiresAt) {
+      setMinutesRemaining(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const diffMs = new Date(huntVoucher.expiresAt).getTime() - Date.now();
+      if (diffMs <= 0) {
+        clearCoupon();
+        setCouponError("Your treasure hunt voucher has expired.");
+        setMinutesRemaining(null);
+      } else {
+        setMinutesRemaining(Math.max(1, Math.ceil(diffMs / (60 * 1000))));
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 30 * 1000);
+    return () => clearInterval(interval);
+  }, [huntVoucher, clearCoupon]);
 
   // Close on Escape key
   useEffect(() => {
@@ -70,7 +122,17 @@ export default function CartDrawer({ isOpen, onClose, closureInfo }: CartDrawerP
     try {
       const res = await validateCouponAction(couponInput.trim());
       if (res.success && res.code) {
-        setCoupon(res.code, res.discountPercent);
+        if (res.isHunt) {
+          setHuntVoucher({
+            code: res.code,
+            expiresAt: res.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            label: res.huntLabel || "Treasure Hunt Reward",
+            offerType: res.offerType,
+            discountPercent: res.discountPercent,
+          });
+        } else {
+          setCoupon(res.code, res.discountPercent);
+        }
         setCouponInput("");
         setCouponError("");
       } else {
@@ -208,13 +270,40 @@ export default function CartDrawer({ isOpen, onClose, closureInfo }: CartDrawerP
                 <Trash2 size={12} /> Clear cart
               </button>
 
-              {/* Creator Code Input Section */}
+              {/* Promo & Treasure Code Input Section */}
               <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
                 <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                  <Tag size={14} className="text-brand-accent" /> Have a creator code?
+                  <Tag size={14} className="text-brand-accent" /> Have a promo or treasure code?
                 </p>
 
-                {couponCode ? (
+                {huntVoucher ? (
+                  <div className="flex items-center justify-between bg-amber-50/80 border border-amber-200/80 p-3 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-[#445916] shrink-0" />
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs text-brand-primary font-mono">
+                            {huntVoucher.code}
+                          </span>
+                          {minutesRemaining !== null && (
+                            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                              <Clock size={9} /> {minutesRemaining}m left
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#445916] font-semibold mt-0.5">
+                          {huntVoucher.label}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={clearCoupon}
+                      className="text-xs font-semibold text-rose-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : couponCode ? (
                   <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
                     <div className="flex items-center gap-2">
                       <CheckCircle size={16} className="text-emerald-600" />
