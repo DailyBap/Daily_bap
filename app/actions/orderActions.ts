@@ -201,7 +201,7 @@ export async function placeOrder(
         influencerId: pricingRes.influencerId,
         discountAmount: pricingRes.discountAmount,
         commissionAmount: pricingRes.commissionAmount,
-        huntClaimId: pricingRes.huntClaimId || null,
+        huntClaimId: pricingRes.huntClaimId ?? null,
         status: "pending",
         whatsappSent: "no",
       })

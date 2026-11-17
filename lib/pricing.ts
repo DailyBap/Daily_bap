@@ -4,6 +4,7 @@ import {
   bentoBoxes,
   bibimbapBowls,
   koreanSkewers,
+  kpopChicken,
   kimbapRolls,
   authenticSides,
   addOns,
@@ -25,7 +26,7 @@ import { HUNT_CONFIG } from "@/lib/hunt/config";
 // Construct server-side authoritative price catalog map
 const BRAND_MENU_MAP = new Map<string, MenuItem>();
 
-[...bentoBoxes, ...bibimbapBowls, ...koreanSkewers, ...kimbapRolls, ...authenticSides, ...addOns].forEach((item) => {
+[...bentoBoxes, ...bibimbapBowls, ...koreanSkewers, ...kpopChicken, ...kimbapRolls, ...authenticSides, ...addOns].forEach((item) => {
   BRAND_MENU_MAP.set(item.id, item);
 });
 

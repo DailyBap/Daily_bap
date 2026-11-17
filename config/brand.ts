@@ -287,6 +287,21 @@ export const addOns: MenuItem[] = [
   },
 ];
 
+export const kpopChicken: MenuItem[] = [
+  {
+    id: "kpop-chicken",
+    name: "K-Pop Chicken (10-12 Pieces)",
+    category: "kpopchicken",
+    price: 150,
+    description: "Crispy Korean-style fried chicken tossed in our signature sweet & spicy glaze — 10-12 juicy pieces per serving.",
+    tags: ["bestseller"],
+    modelRef: null,
+    isVegetarian: false,
+    image: "/images/placeholder.jpg",
+    diet: "nonveg",
+  },
+];
+
 // Unified menu export for easy iteration
 export const koreanSkewers: MenuItem[] = [
   {
@@ -418,6 +433,7 @@ export const menuData = {
   bentoBoxes,
   bibimbapBowls,
   koreanSkewers,
+  kpopChicken,
   kimbapRolls,
   authenticSides,
   addOns,
@@ -428,6 +444,7 @@ export const menuCategories = [
   { key: "bentoBoxes", label: "Bento Boxes", emoji: "🍱" },
   { key: "bibimbapBowls", label: "Bibimbap Bowls", emoji: "🥣" },
   { key: "koreanSkewers", label: "Korean Skewers", emoji: "🍢" },
+  { key: "kpopChicken", label: "K-Pop Chicken", emoji: "🍗" },
   { key: "kimbapRolls", label: "Kimbap Rolls", emoji: "🍙" },
   { key: "authenticSides", label: "Authentic Sides", emoji: "🥒" },
   { key: "addOns", label: "Add-Ons", emoji: "✨" },
