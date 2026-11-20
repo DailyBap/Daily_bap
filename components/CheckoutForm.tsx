@@ -50,8 +50,8 @@ export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
       newErrors.phone = "Enter a valid 10-digit Indian mobile number";
     if (!customerInfo.address.trim() || customerInfo.address.trim().length < 10)
       newErrors.address = "Please enter a full delivery address (minimum 10 characters)";
-    if (!isDeliverable)
-      newErrors.zone = "Your location is outside our delivery zone (10km radius)";
+    if (customerInfo.lat != null && !isDeliverable)
+      newErrors.zone = "Your pinned location is outside our delivery zone (10km radius)";
     if (!requestedDeliveryTime || !deliverySlotLabel) {
       newErrors.slot = "Please select a delivery time slot";
     } else {
@@ -238,13 +238,19 @@ export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
           <span className="text-[11px] text-gray-400 font-medium">10km Delivery Radius</span>
         </div>
         <DeliveryMap />
-        {isDeliverable ? (
-          <p className="text-emerald-700 text-xs font-semibold flex items-center gap-1">
-            ✓ Your pinned location is within our Guwahati delivery radius.
-          </p>
+        {customerInfo.lat != null ? (
+          isDeliverable ? (
+            <p className="text-emerald-700 text-xs font-semibold flex items-center gap-1">
+              ✓ Your pinned location is within our Guwahati delivery radius.
+            </p>
+          ) : (
+            <p className="text-amber-700 text-xs font-medium flex items-center gap-1">
+              <AlertCircle size={12} /> Pinned location is outside our 10km radius.
+            </p>
+          )
         ) : (
-          <p className="text-amber-700 text-xs font-medium flex items-center gap-1">
-            <AlertCircle size={12} /> Pinned location is outside our 10km radius.
+          <p className="text-gray-500 text-xs font-normal flex items-center gap-1">
+            📍 Tap the map to pin your exact location (optional within Guwahati).
           </p>
         )}
         {errors.zone && (
@@ -282,7 +288,7 @@ export default function CheckoutForm({ closureInfo }: CheckoutFormProps = {}) {
       <div className="space-y-2 pt-2">
         <button
           type="submit"
-          disabled={isPending || !isDeliverable}
+          disabled={isPending || (customerInfo.lat != null && !isDeliverable)}
           className="w-full flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-accent disabled:bg-gray-200 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl text-base transition-all hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-brand-primary/20"
         >
           {isPending ? (

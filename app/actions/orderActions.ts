@@ -140,6 +140,24 @@ export async function placeOrder(
       deliverySlotLabel,
     } = payload;
 
+    // Strict input validation guards
+    if (!customer || typeof customer !== "object") {
+      return { success: false, error: "Customer details are required." };
+    }
+    if (!customer.name || !customer.name.trim()) {
+      return { success: false, error: "Please enter your full name." };
+    }
+    const cleanPhone = customer.phone ? customer.phone.replace(/\D/g, "") : "";
+    if (cleanPhone.length < 10) {
+      return { success: false, error: "Please enter a valid 10-digit Indian mobile number." };
+    }
+    if (!customer.address || customer.address.trim().length < 5) {
+      return { success: false, error: "Please enter a valid delivery address (minimum 5 characters)." };
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return { success: false, error: "Your cart is empty. Please add items to place an order." };
+    }
+
     // 1. [stage:slot] Server-side validation and parsing of requested delivery time slot
     if (!deliverySlotLabel && !requestedDeliveryTime) {
       return {
@@ -166,14 +184,12 @@ export async function placeOrder(
       };
     }
     const requestedDeliveryTimeUTC = slotParse.date;
-    const cleanPhone = customer.phone.replace(/\D/g, "");
 
     // 2. [stage:pricing] Run independent initial queries in parallel via Promise.all
     // - Store closure settings check
     // - Authoritative pricing, distance, coupon discount, and fee calculation
-    // - User lookup by phone number
     advanceStage("pricing");
-    const [closureError, pricingRes, existingUsers] = await Promise.all([
+    const [closureError, pricingRes] = await Promise.all([
       assertOrderAllowed(effectiveSlotLabel),
       calculateOrderTotals({
         items,
@@ -182,11 +198,6 @@ export async function placeOrder(
         couponCode,
         customerPhone: customer.phone,
       }),
-      db
-        .select()
-        .from(users)
-        .where(eq(users.phone, cleanPhone))
-        .limit(1),
     ]);
 
     if (closureError) {
@@ -203,23 +214,21 @@ export async function placeOrder(
       };
     }
 
-    // 3. [stage:db:user] Find or create user
+    // 3. [stage:db:user] Atomic find or create user by unique phone
     advanceStage("db:user");
-    let userId: string;
+    const [upsertedUser] = await db
+      .insert(users)
+      .values({ name: customer.name.trim(), phone: cleanPhone })
+      .onConflictDoUpdate({
+        target: users.phone,
+        set: { name: customer.name.trim() },
+      })
+      .returning({ id: users.id });
 
-    if (existingUsers.length > 0) {
-      userId = existingUsers[0].id;
-      await db
-        .update(users)
-        .set({ name: customer.name })
-        .where(eq(users.id, userId));
-    } else {
-      const [newUser] = await db
-        .insert(users)
-        .values({ name: customer.name, phone: cleanPhone })
-        .returning({ id: users.id });
-      userId = newUser.id;
+    if (!upsertedUser?.id) {
+      throw new Error("Failed to record customer user record.");
     }
+    const userId = upsertedUser.id;
 
     // 4. [stage:db:influencer] Influencer FK resilience
     // pricingRes was already verified against influencers table in calculateOrderTotals

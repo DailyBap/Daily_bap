@@ -59,12 +59,17 @@ export async function assertOrderAllowed(
   slot: string,
   referenceDate: Date | string = new Date()
 ): Promise<string | null> {
-  let closureInfo: ClosureInfo | null;
+  let closureInfo: ClosureInfo | null = null;
   try {
     closureInfo = await getClosureInfo();
-  } catch (error) {
-    console.error("[assertOrderAllowed] Failed to read store status from DB:", error);
-    return "Please try again in a moment."; // Fail closed on DB error
+  } catch {
+    // Retry once in case of a transient connection cold start
+    try {
+      closureInfo = await getClosureInfo();
+    } catch (retryError) {
+      console.error("[assertOrderAllowed] Failed to read store status from DB:", retryError);
+      return "Please try again in a moment."; // Fail closed on DB error
+    }
   }
 
   return checkOrderAllowed(slot, closureInfo, referenceDate);

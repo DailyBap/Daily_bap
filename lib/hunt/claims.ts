@@ -11,6 +11,17 @@ import {
   qrCodeSchema,
 } from "./codes";
 
+/**
+ * Safely extracts rows array from Drizzle execute result,
+ * handling both neon-http object shape ({ rows: [...] }) and raw array returns.
+ */
+function getRows<T = any>(res: any): T[] {
+  if (!res) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res.rows)) return res.rows;
+  return [];
+}
+
 export type HoldResultReason = "ok" | "invalid" | "depleted" | "already_redeemed";
 
 export interface HoldResult {
@@ -68,7 +79,7 @@ export async function sweepExpiredClaims(): Promise<number> {
       RETURNING counts.cnt;
     `);
 
-    return (res as unknown as Array<{ cnt: number }>).reduce((sum, r) => sum + (r.cnt || 0), 0);
+    return getRows<{ cnt: number }>(res).reduce((sum, r) => sum + (r.cnt || 0), 0);
   } catch (error) {
     console.error("[sweepExpiredClaims] Error sweeping expired claims:", error);
     return 0;
@@ -185,7 +196,7 @@ export async function holdCode(rawCode: string, deviceId: string): Promise<HoldR
       RETURNING id;
     `);
 
-    const incRows = incRes as unknown as Array<{ id: number }>;
+    const incRows = getRows<{ id: number }>(incRes);
     if (incRows.length === 0) {
       return {
         success: false,
@@ -205,7 +216,7 @@ export async function holdCode(rawCode: string, deviceId: string): Promise<HoldR
       RETURNING id, voucher_code;
     `);
 
-    const updateRows = updateRes as unknown as Array<{ id: number; voucher_code: string }>;
+    const updateRows = getRows<{ id: number; voucher_code: string }>(updateRes);
     if (updateRows.length === 0) {
       // Concurrency race: revert reserved_count
       await db.execute(sql`
@@ -244,7 +255,7 @@ export async function holdCode(rawCode: string, deviceId: string): Promise<HoldR
     RETURNING id;
   `);
 
-  const incRows = incRes as unknown as Array<{ id: number }>;
+  const incRows = getRows<{ id: number }>(incRes);
   if (incRows.length === 0) {
     return {
       success: false,
@@ -360,11 +371,11 @@ export async function redeemHold(
     RETURNING id, code_id, voucher_code;
   `);
 
-  const redeemedRows = redeemRes as unknown as Array<{
+  const redeemedRows = getRows<{
     id: number;
     code_id: number;
     voucher_code: string;
-  }>;
+  }>(redeemRes);
 
   if (redeemedRows.length === 0) {
     return {
@@ -406,7 +417,7 @@ export async function releaseClaim(claimId: number): Promise<boolean> {
       RETURNING id, code_id;
     `);
 
-    const releasedRows = releaseRes as unknown as Array<{ id: number; code_id: number }>;
+    const releasedRows = getRows<{ id: number; code_id: number }>(releaseRes);
     if (releasedRows.length === 0) return false;
 
     if (HUNT_CONFIG.HUNT_RESTORE_ON_CANCEL) {
