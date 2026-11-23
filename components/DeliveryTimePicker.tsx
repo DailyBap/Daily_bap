@@ -42,8 +42,19 @@ export default function DeliveryTimePicker({
   const { requestedDeliveryTime, deliverySlotLabel, setDeliverySlot } =
     useCartStore();
 
-  const today = todayIST();
-  const tomorrow = tomorrowIST();
+  const [currentNow, setCurrentNow] = useState<Date>(() => new Date());
+  const [slotExpiryNotice, setSlotExpiryNotice] = useState<string | null>(null);
+
+  // Periodically refresh current time every 30 seconds to recalculate lead time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentNow(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const today = todayIST(currentNow);
+  const tomorrow = tomorrowIST(currentNow);
 
   // Compute all days in scheduling window
   // Rule: At least 10 days, or max(10, reopening day + 2 days) when closure is active
@@ -58,7 +69,7 @@ export default function DeliveryTimePicker({
     }
 
     const options: DayOption[] = [];
-    const isTodayCutoffClosed = isTodayOrderingClosed();
+    const isTodayCutoffClosed = isTodayOrderingClosed(currentNow);
 
     for (let offset = 0; offset < windowDays; offset++) {
       const dateStr = addDaysIST(today, offset);
@@ -130,9 +141,9 @@ export default function DeliveryTimePicker({
       ? "tomorrow"
       : dayOpt.dateStr;
 
-    const { slots } = getAvailableSlots(param);
+    const { slots } = getAvailableSlots(param, currentNow);
     return slots;
-  }, [dayOptions, selectedDateStr]);
+  }, [dayOptions, selectedDateStr, currentNow]);
 
   // Persisted cart validation & initial slot synchronization
   useEffect(() => {
@@ -141,6 +152,7 @@ export default function DeliveryTimePicker({
     // Check if the current deliverySlotLabel in the cart is valid
     const currentLabel = deliverySlotLabel || requestedDeliveryTime;
     let needsReset = false;
+    let expiredNotice = false;
 
     if (!currentLabel) {
       needsReset = true;
@@ -160,15 +172,32 @@ export default function DeliveryTimePicker({
           needsReset = true;
         }
       }
+
+      // Check if selected slot for today has expired because time elapsed
+      const isToday = dayOptions.find((d) => d.dateStr === selectedDateStr)?.isToday;
+      if (isToday && (currentLabel.startsWith("Today") || currentLabel.startsWith("ASAP"))) {
+        const stillPresent = availableSlots.some((s) => s.label === currentLabel);
+        if (!stillPresent) {
+          needsReset = true;
+          expiredNotice = true;
+        }
+      }
     }
 
-    // Auto-select first slot of first open day if slot was empty or closed
+    // Auto-select first slot of first open day if slot was empty or closed/expired
     if (needsReset) {
-      setDeliverySlot(availableSlots[0].label, availableSlots[0].label);
+      const nextSlot = availableSlots[0].label;
+      setDeliverySlot(nextSlot, nextSlot);
+      if (expiredNotice && currentLabel) {
+        setSlotExpiryNotice(
+          `Your previous time slot "${currentLabel}" expired and was automatically updated to "${nextSlot}".`
+        );
+      }
     }
-  }, [availableSlots, deliverySlotLabel, requestedDeliveryTime, dayOptions, closureInfo, today, tomorrow, setDeliverySlot]);
+  }, [availableSlots, deliverySlotLabel, requestedDeliveryTime, dayOptions, closureInfo, today, tomorrow, selectedDateStr, setDeliverySlot]);
 
   const handleDaySelect = (dateStr: string) => {
+    setSlotExpiryNotice(null);
     const dayOpt = dayOptions.find((d) => d.dateStr === dateStr);
     if (!dayOpt || dayOpt.isClosed) return;
 
@@ -180,7 +209,7 @@ export default function DeliveryTimePicker({
       ? "tomorrow"
       : dayOpt.dateStr;
 
-    const { slots } = getAvailableSlots(param);
+    const { slots } = getAvailableSlots(param, currentNow);
     if (slots.length > 0) {
       setDeliverySlot(slots[0].label, slots[0].label);
     } else {
@@ -189,6 +218,7 @@ export default function DeliveryTimePicker({
   };
 
   const handleSlotChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSlotExpiryNotice(null);
     const selectedVal = e.target.value;
     const found = availableSlots.find((s) => s.label === selectedVal);
     if (found) {
@@ -310,6 +340,14 @@ export default function DeliveryTimePicker({
                 }!`
               : "Kitchen is closed for today! Pre-order now for tomorrow's first delivery."}
           </span>
+        </div>
+      )}
+
+      {/* Notice if previously selected slot expired */}
+      {slotExpiryNotice && (
+        <div className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-900 p-2.5 rounded-xl border border-amber-300 font-medium">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>{slotExpiryNotice}</span>
         </div>
       )}
 
