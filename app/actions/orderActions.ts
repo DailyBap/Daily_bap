@@ -13,7 +13,6 @@ import { getClientIp } from "@/lib/adminAuth";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
 import { eq, count } from "drizzle-orm";
 import { sendTelegramOrderNotification } from "@/lib/telegram";
-import { headers } from "next/headers";
 import type { CartItem, CustomerInfo } from "@/types";
 
 /**
@@ -99,14 +98,6 @@ export interface PlaceOrderResult {
   orderNumber?: string;
   error?: string;
   fallback?: boolean;
-  debug?: {
-    stage?: string;
-    name?: string;
-    message?: string;
-    code?: string;
-    constraint?: string;
-    detail?: string;
-  };
 }
 
 /**
@@ -388,33 +379,12 @@ export async function placeOrder(
       // Non-fatal
     }
 
-    // Diagnostic hook: when request header "x-debug-key" matches process.env.DEBUG_KEY
-    let debugInfo: PlaceOrderResult["debug"] | undefined = undefined;
-    try {
-      const headerStore = await headers();
-      const debugHeader = headerStore.get("x-debug-key");
-      const expectedKey = process.env.DEBUG_KEY?.trim();
-      if (expectedKey && debugHeader && debugHeader.trim() === expectedKey) {
-        debugInfo = {
-          stage: currentStage,
-          name: error?.name,
-          message: error?.message,
-          code: String(error?.cause?.code || error?.code || ""),
-          constraint: String(error?.cause?.constraint || error?.constraint || ""),
-          detail: String(error?.cause?.detail || error?.detail || ""),
-        };
-      }
-    } catch {
-      // Non-fatal
-    }
-
     // Return safe, user-friendly error to browser with fallback flag (never expose SQL, IDs, or params)
     return {
       success: false,
       error: "We couldn't place your order. Please try again or contact us on WhatsApp.",
       fallback: true,
       whatsappUrl: fallbackWaUrl,
-      ...(debugInfo ? { debug: debugInfo } : {}),
     };
   }
 }
