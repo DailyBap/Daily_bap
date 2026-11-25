@@ -22,6 +22,7 @@ import { calculateOrderTotals } from "@/lib/pricing";
 import { getClosureInfo, assertOrderAllowed } from "@/lib/storeStatus";
 import { sendTelegramOrderNotification } from "@/lib/telegram";
 import { eq } from "drizzle-orm";
+import { after } from "next/server";
 import type { CartItem, CustomerInfo } from "@/types";
 
 // Allow streaming responses up to 60 seconds
@@ -327,8 +328,8 @@ export async function POST(req: Request) {
                 })
                 .returning({ id: orders.id });
 
-              // 5. Trigger Non-blocking Telegram Notification (Task 6)
-              void sendTelegramOrderNotification({
+              // 5. Trigger Non-blocking Telegram Notification via Next.js after() (Task 6)
+              const telegramPayload = {
                 orderId: newOrder.id,
                 orderNumber,
                 customerName,
@@ -340,9 +341,21 @@ export async function POST(req: Request) {
                 deliveryFee: pricingRes.deliveryFee,
                 discountAmount: pricingRes.discountAmount,
                 couponCode: pricingRes.couponCode,
-              }).catch((err) => {
-                console.error("[chat/createOrderRecord] Telegram notification error:", err);
-              });
+              };
+
+              try {
+                after(async () => {
+                  try {
+                    await sendTelegramOrderNotification(telegramPayload);
+                  } catch (err) {
+                    console.error("[chat/createOrderRecord] Telegram notification error:", err);
+                  }
+                });
+              } catch {
+                await sendTelegramOrderNotification(telegramPayload).catch((err) => {
+                  console.error("[chat/createOrderRecord] Telegram fallback error:", err);
+                });
+              }
 
               // 6. Generate WhatsApp checkout deep link
               const customer: CustomerInfo = {

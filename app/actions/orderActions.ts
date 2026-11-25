@@ -12,6 +12,7 @@ import { redeemHold } from "@/lib/hunt/claims";
 import { getClientIp } from "@/lib/adminAuth";
 import { MAX_ORDERS_PER_SLOT } from "@/config/brand";
 import { eq, count } from "drizzle-orm";
+import { after } from "next/server";
 import { sendTelegramOrderNotification } from "@/lib/telegram";
 import type { CartItem, CustomerInfo } from "@/types";
 
@@ -305,25 +306,33 @@ export async function placeOrder(
 
     // 6. [stage:post:notify] Secondary notification steps (Telegram & WhatsApp link)
     advanceStage("post:notify");
+    const telegramPayload = {
+      orderId: newOrder.id,
+      orderNumber,
+      customerName: customer.name,
+      customerPhone: cleanPhone,
+      deliveryAddress: customer.address,
+      deliverySlotLabel: effectiveSlotLabel,
+      items: pricingRes.items as Array<{ name?: string; summary?: string; quantity?: number; price?: number }>,
+      totalAmount: pricingRes.total,
+      deliveryFee: pricingRes.deliveryFee,
+      discountAmount: pricingRes.discountAmount,
+      couponCode: pricingRes.couponCode,
+      huntRewardLabel: pricingRes.huntRewardLabel || null,
+    };
+
     try {
-      void sendTelegramOrderNotification({
-        orderId: newOrder.id,
-        orderNumber,
-        customerName: customer.name,
-        customerPhone: cleanPhone,
-        deliveryAddress: customer.address,
-        deliverySlotLabel: effectiveSlotLabel,
-        items: pricingRes.items as Array<{ name?: string; summary?: string; quantity?: number; price?: number }>,
-        totalAmount: pricingRes.total,
-        deliveryFee: pricingRes.deliveryFee,
-        discountAmount: pricingRes.discountAmount,
-        couponCode: pricingRes.couponCode,
-        huntRewardLabel: pricingRes.huntRewardLabel || null,
-      }).catch((err) => {
-        console.error("[placeOrder][stage:post:notify] Secondary step failed (Telegram notification):", err);
+      after(async () => {
+        try {
+          await sendTelegramOrderNotification(telegramPayload);
+        } catch (err) {
+          console.error("[placeOrder][stage:post:notify] Secondary step failed (Telegram notification):", err);
+        }
       });
-    } catch (tgErr) {
-      console.error("[placeOrder][stage:post:notify] Secondary step error (Telegram dispatch):", tgErr);
+    } catch {
+      await sendTelegramOrderNotification(telegramPayload).catch((tgErr) => {
+        console.error("[placeOrder][stage:post:notify] Secondary step error (Telegram fallback):", tgErr);
+      });
     }
 
     let whatsappUrl: string | undefined;
